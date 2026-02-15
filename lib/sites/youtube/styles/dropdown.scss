@@ -1,0 +1,254 @@
+// lib/sites/youtube/styles/dropdown.scss
+// Variables
+$dropdown-bg: rgba(0, 0, 0, 0.8);
+$dropdown-border: #343434;
+$dropdown-shadow: rgba(0, 0, 0, 0.6);
+$button-bg: rgba(255, 255, 255, 0.1);
+$button-bg-hover: rgba(255, 255, 255, 0.2);
+$item-bg-hover: rgba(255, 255, 255, 0.1);
+$toggle-active: #3ea6ff;
+$toggle-inactive: #717171;
+$text-primary: #fff;
+$separator-color: #404040;
+
+// Mixins
+@mixin flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@mixin smooth-transition($properties...) {
+  transition: $properties;
+}
+
+// Container
+#yt-enhancer-dropdown {
+  position: relative;
+  display: inline-block;
+  margin-right: 1rem;
+
+  // Button
+  &-button {
+    @include flex-center;
+    background: $button-bg;
+    border: none;
+    cursor: pointer;
+    padding: 8px;
+    color: $text-primary;
+    border-radius: 50%;
+    @include smooth-transition(background 0.2s ease);
+
+    &:hover {
+      background: $button-bg-hover;
+    }
+
+    svg {
+      display: block;
+      @include smooth-transition(transform 0.3s ease);
+    }
+
+    &.active svg {
+      transform: rotate(45deg);
+    }
+  }
+}
+
+// Menu
+#yt-enhancer-menu-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px;
+  font-size: 20px;
+  color: $text-primary;
+  font-weight: 600;
+  border-bottom: 1px solid $separator-color;
+  margin-bottom: 6px;
+  gap: 6px;
+
+  .header-title {
+    flex: 1;
+    font-size: 2.2rem;
+  }
+
+  .header-refresh {
+    @include flex-center;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 2px;
+    color: rgba(255, 255, 255, 0.7);
+    border-radius: 8px;
+    @include smooth-transition(background 0.2s ease, color 0.2s ease);
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: $text-primary;
+    }
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+
+    svg {
+      display: block;
+      width: 28px;
+      height: 28px;
+    }
+  }
+}
+
+#yt-enhancer-menu {
+  display: none;
+  background: $dropdown-bg;
+  backdrop-filter: blur(8px);
+  border: 1px solid $dropdown-border;
+  position: fixed;
+  border-radius: 12px;
+  padding: 12px;
+  min-width: 220px;
+  box-shadow: 0 4px 16px $dropdown-shadow;
+  z-index: 9999;
+  top: 5.2rem;
+  right: 23rem;
+  user-select: none;
+
+  &.open {
+    display: block;
+  }
+
+  // Toggle Item
+  .toggle-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    cursor: pointer;
+    border-radius: 8px;
+    margin-bottom: 4px;
+    @include smooth-transition(background 0.2s ease);
+
+    &:hover {
+      background: $item-bg-hover;
+    }
+
+    &-label {
+      color: $text-primary;
+      font-size: 16px;
+    }
+  }
+
+  // Toggle Switch
+  .toggle-switch {
+    position: relative;
+    width: 44px;
+    height: 24px;
+    border-radius: 12px;
+    flex-shrink: 0;
+    @include smooth-transition(background 0.3s ease);
+    background: $toggle-inactive;
+
+    &.active {
+      background: $toggle-active;
+
+      .toggle-knob {
+        left: 22px;
+      }
+    }
+  }
+
+  // Toggle Knob
+  .toggle-knob {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
+    background: $text-primary;
+    border-radius: 50%;
+    @include smooth-transition(left 0.3s ease);
+  }
+}
+
+// Quality picker
+.quality-selector-container {
+  padding: 8px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin-top: 8px;
+}
+
+.quality-selector-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.quality-selector-label {
+  font-size: 1.4rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.quality-badge {
+  font-size: 1.2rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  background: rgba(33, 150, 243, 0.15);
+  color: #2196f3;
+  border-radius: 4px;
+  letter-spacing: 0.3px;
+}
+
+.quality-select-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.quality-selector {
+  width: 100%;
+  padding: 8px 32px 8px 12px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: #fff;
+  font-size: 1.4rem;
+  font-weight: 500;
+  cursor: pointer;
+  appearance: none;
+  transition: all 0.2s ease;
+  outline: none;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.25);
+  }
+
+  &:focus {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: #2196f3;
+    box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.15);
+  }
+}
+
+.quality-select-icon {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: rgba(255, 255, 255, 0.6);
+  transition: transform 0.2s ease;
+}
+
+.quality-selector:focus + .quality-select-icon {
+  transform: translateY(-50%) rotate(180deg);
+}
+
+.quality-selector option {
+  background: #282828;
+  color: #fff;
+  padding: 8px;
+}
