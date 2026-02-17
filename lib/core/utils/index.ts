@@ -159,3 +159,26 @@ export const waitForPlayer = async (): Promise<YouTubePlayer> => {
     }, 200);
   });
 };
+
+export const buildSVG = (
+  viewBox: string,
+  paths: Array<{ d: string; attrs?: Record<string, string> }>,
+  svgAttrs?: Record<string, string>,
+): SVGSVGElement => {
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", viewBox);
+  svg.setAttribute("fill", "none");
+  if (svgAttrs) {
+    for (const [k, v] of Object.entries(svgAttrs)) svg.setAttribute(k, v);
+  }
+  for (const { d, attrs } of paths) {
+    const path = document.createElementNS(NS, "path");
+    path.setAttribute("d", d);
+    if (attrs) {
+      for (const [k, v] of Object.entries(attrs)) path.setAttribute(k, v);
+    }
+    svg.appendChild(path);
+  }
+  return svg;
+};

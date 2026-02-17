@@ -12,16 +12,15 @@ import type {
   ResultsContent,
   UpdateDateTextAction,
   UpdateViewershipAction,
-  YouTubeUpdateResponse,
 } from "../../types/videoData";
 import {
+  buildSVG,
   fetchData,
   getVideoId,
   waitForElement,
   waitForPlayer,
 } from "@/lib/core/utils";
-import { CountUp } from "countup.js";
-import { Odometer } from "odometer_countup";
+import { Odometer } from "@/lib/core/odometer";
 
 interface State {
   id: string | null;
@@ -63,11 +62,11 @@ const config: Config = {
 
 const cleanup: {
   timeTracking: (() => void) | null;
-  countUp: CountUp | null;
+  odometer: Odometer | null;
   handlers: Array<() => void>;
 } = {
   timeTracking: null,
-  countUp: null,
+  odometer: null,
   handlers: [],
 };
 
@@ -89,8 +88,8 @@ function runCleanup() {
   cleanup.timeTracking?.();
   cleanup.timeTracking = null;
 
-  cleanup.countUp?.reset();
-  cleanup.countUp = null;
+  cleanup.odometer?.destroy();
+  cleanup.odometer = null;
 
   cleanup.handlers.forEach((fn) => {
     try {
@@ -230,40 +229,30 @@ const animation = {
         return;
       }
 
-      cleanup.countUp?.reset();
-
       const { suffix, divisor, decimalPlaces } =
         viewCountParser.extractSuffix(newViewCountString);
       const diff = Math.abs(toValue - fromValue);
-      const base =
-        diff < 10 ? 0.8 : Math.min(2.5, 1.0 + Math.log10(diff + 1) * 0.6);
-      const duration = base + 0.4 * Math.min(1, Math.log10(diff + 1));
+      const durationMs =
+        (diff < 10 ? 0.8 : Math.min(2.5, 1.0 + Math.log10(diff + 1) * 0.6)) *
+        1000;
 
       const suffixElement = document.getElementById("yt-enhancer-view-suffix");
       if (suffixElement) suffixElement.textContent = suffix;
 
-      cleanup.countUp = new CountUp(element, toValue / divisor, {
-        startVal: fromValue / divisor,
-        decimalPlaces,
-        duration,
-        useGrouping: true,
-        useEasing: true,
-        smartEasingThreshold: 999,
-        smartEasingAmount: 333,
-        separator: ",",
-        decimal: ".",
-        plugin: new Odometer({ duration: duration * 0.4, lastDigitDelay: 0.1 }),
-        onCompleteCallback: () => {
-          if (!state.isDestroyed) state.currentViewCount = toValue;
-          cleanup.countUp = null;
-        },
-      });
-
-      if (!cleanup.countUp.error) {
-        cleanup.countUp.start();
-      } else {
+      if (!cleanup.odometer) {
         animation.setStatic(element, toValue, newViewCountString);
+        return;
       }
+
+      cleanup.odometer.update(toValue / divisor);
+
+      element.addEventListener(
+        "odometerdone",
+        () => {
+          if (!state.isDestroyed) state.currentViewCount = toValue;
+        },
+        { once: true },
+      );
     } catch {
       animation.setStatic(
         element,
@@ -409,20 +398,29 @@ const ui = {
 
       const viewCountSpan = document.createElement("span");
       viewCountSpan.id = "yt-enhancer-view-count";
-      const formatted = (newViewCount / divisor)
-        .toFixed(decimalPlaces)
-        .replace(/\.0+$/, "");
-      viewCountSpan.textContent = formatted.replace(
-        /\B(?=(\d{3})+(?!\d))/g,
-        ",",
-      );
       viewCountSpan.style.fontVariantNumeric = "tabular-nums";
+
+      const initialValue = newViewCount / divisor;
+      const formattedInitial = initialValue
+        .toFixed(decimalPlaces)
+        .replace(/\.0+$/, "")
+        .replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+      viewCountSpan.textContent = formattedInitial;
 
       const suffixSpan = document.createElement("span");
       suffixSpan.id = "yt-enhancer-view-suffix";
       suffixSpan.textContent = suffix;
 
       viewCountContainer.append(viewCountSpan, suffixSpan);
+
+      cleanup.odometer = new Odometer({
+        el: viewCountSpan,
+        value: newViewCount / divisor,
+        duration: 2000,
+        format:
+          decimalPlaces > 0 ? `(,ddd).${"d".repeat(decimalPlaces)}` : "(,ddd)",
+        theme: "minimal",
+      });
 
       const separator = document.createElement("span");
       separator.textContent = "•";
@@ -439,11 +437,14 @@ const ui = {
   createRefreshButton: () => {
     const button = document.createElement("button");
     button.id = "yt-enhancer-refresh-btn";
-    button.innerHTML = `
-      <svg height="28" viewBox="0 0 24 24" width="28" focusable="false">
-        <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" fill="currentColor"></path>
-      </svg>
-    `;
+    button.appendChild(
+      buildSVG("0 0 24 24", [
+        {
+          d: "M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z",
+          attrs: { fill: "currentColor" },
+        },
+      ]),
+    );
 
     button.onclick = async () => {
       if (state.isDestroyed) return;
