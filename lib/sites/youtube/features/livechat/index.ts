@@ -1,11 +1,9 @@
 // lib/sites/youtube/features/livechat/index.ts
-
 import { delay, waitForElement } from "@/lib/core/utils";
 
 export const livechatFeature = (() => {
   let allChatButton: HTMLButtonElement | null = null;
 
-  // ===== Main Functions =====
   const clickAllChatButton = async () => {
     try {
       allChatButton = await waitForElement<HTMLButtonElement>(
@@ -23,7 +21,6 @@ export const livechatFeature = (() => {
     }
   };
 
-  // ===== Module Interface =====
   return {
     match: (path: string) => {
       return path === "/live_chat" || path === "/live_chat_replay";

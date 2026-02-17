@@ -9,6 +9,7 @@ import "@/lib/sites/youtube/styles/style.scss";
 export default defineContentScript({
   matches: ["*://www.youtube.com/*"],
   runAt: "document_idle",
+  allFrames: true,
   world: "MAIN",
   cssInjectionMode: "manifest",
   main() {

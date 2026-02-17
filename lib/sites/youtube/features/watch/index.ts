@@ -301,36 +301,14 @@ const networkIntercept = (() => {
       if (isSetup) return;
       isSetup = true;
 
-      const originalFetch = window.fetch;
-
-      window.fetch = new Proxy(originalFetch, {
-        apply: async (
-          target,
-          thisArg,
-          args: [RequestInfo | URL, RequestInit?],
-        ) => {
-          const [input] = args;
-          const response = await Reflect.apply(target, thisArg, args);
-
-          if (state.isDestroyed) return response;
-
-          const url =
-            typeof input === "string"
-              ? input
-              : input instanceof URL
-                ? input.href
-                : (input as Request).url;
-
-          if (url?.includes("/youtubei/v1/updated_metadata")) {
-            try {
-              const data: YouTubeUpdateResponse = await response.clone().json();
-              if (data.actions && !state.isDestroyed)
-                networkIntercept.handleUpdate(data.actions);
-            } catch {}
-          }
-
-          return response;
-        },
+      window.addEventListener("yt-enhancer-metadata-update", (event) => {
+        if (state.isDestroyed) return;
+        const { actions } = (
+          event as CustomEvent<{
+            actions: Array<UpdateViewershipAction | UpdateDateTextAction>;
+          }>
+        ).detail;
+        networkIntercept.handleUpdate(actions);
       });
     },
     handleUpdate: (
@@ -352,14 +330,13 @@ const networkIntercept = (() => {
             ?.videoViewCountRenderer?.viewCount;
         const newDateText = dateTextAction?.updateDateTextAction?.dateText;
 
-        const viewCountString = newViewCount
-          ? newViewCount.simpleText ||
-            newViewCount.runs?.map((r) => r.text).join("")
-          : undefined;
-        const dateTextString = newDateText
-          ? newDateText.simpleText ||
-            newDateText.runs?.map((r) => r.text).join("")
-          : undefined;
+        const viewCountString =
+          newViewCount?.simpleText ??
+          newViewCount?.runs?.map((r) => r.text).join("");
+
+        const dateTextString =
+          newDateText?.simpleText ??
+          newDateText?.runs?.map((r) => r.text).join("");
 
         if (viewCountString || dateTextString) {
           ui.displayVideoInfo(
