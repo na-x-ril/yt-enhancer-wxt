@@ -1,3 +1,16 @@
-#content:has([ytd-ad-]) {
+#masthead-ad,
+ytd-rich-item-renderer.style-scope.ytd-rich-grid-row
+  #content:has(.ytd-display-ad-renderer),
+.video-ads.ytp-ad-module,
+tp-yt-paper-dialog:has(yt-mealbar-promo-renderer),
+ytd-engagement-panel-section-list-renderer[target-id="engagement-panel-ads"],
+#related #player-ads,
+#related ytd-ad-slot-renderer,
+ytd-ad-slot-renderer,
+yt-mealbar-promo-renderer,
+ytd-popup-container:has(a[href="/premium"]),
+ad-slot-renderer,
+ytm-companion-ad-renderer,
+#related #-ad- {
   display: none !important;
 }
