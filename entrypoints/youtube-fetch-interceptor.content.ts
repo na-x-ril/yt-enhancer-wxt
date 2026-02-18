@@ -1,7 +1,7 @@
 // entrypoints/youtube-fetch-interceptor.content.ts
 
 export default defineContentScript({
-  matches: ["*://www.youtube.com/watch*"],
+  matches: ["*://www.youtube.com/*"],
   world: "MAIN",
   runAt: "document_start",
   main() {
@@ -18,6 +18,8 @@ export default defineContentScript({
         init?: RequestInit,
       ): Promise<Response> {
         const response = await originalFetch(input, init);
+
+        if (!location.pathname.startsWith("/watch")) return response;
 
         const url =
           typeof input === "string"
