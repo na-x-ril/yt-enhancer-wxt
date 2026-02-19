@@ -173,6 +173,7 @@ const timeTracking = {
       if (Math.abs(currentTime - state.lastSavedTime) >= 3) {
         await storageBridge.set(key, currentTime);
         state.lastSavedTime = currentTime;
+        console.log("Last saved time:", state.lastSavedTime);
       }
     } catch {}
   },
@@ -191,6 +192,7 @@ const timeTracking = {
       }
 
       state.player.seekTo(savedTime, true);
+      console.log("Video seeked to:", savedTime);
     } catch {}
   },
   setup: (player: YouTubePlayer) => {
@@ -636,16 +638,6 @@ const videoData = {
           await waitForElement("div.ytp-time-wrapper", 5000);
           if (!state.isDestroyed) ui.displayDVRIndicator(isDVREnabled);
         }
-
-        if (
-          state.player &&
-          !state.isLiveNow &&
-          !isUpdate &&
-          !state.isDestroyed
-        ) {
-          cleanup.timeTracking = timeTracking.setup(state.player);
-          await timeTracking.restore();
-        }
       }
     } catch {}
   },
@@ -779,7 +771,13 @@ export const watchFeature = {
     state.id = currentId;
     await configManager.load();
     networkIntercept.setup();
-    await videoData.fetchAndLog();
+
+    const [,] = await Promise.all([videoData.fetchAndLog(), handleVideo()]);
+
+    if (state.player && !state.isLiveNow && !state.isDestroyed) {
+      cleanup.timeTracking = timeTracking.setup(state.player);
+      await timeTracking.restore();
+    }
 
     const handleBeforeUnload = () => timeTracking.save();
     const handleVisibilityChange = () => document.hidden && timeTracking.save();
