@@ -117,11 +117,16 @@
 }
 .odometer.odometer-auto-theme.odometer-animating-up .odometer-ribbon-inner,
 .odometer.odometer-theme-minimal.odometer-animating-up .odometer-ribbon-inner {
-  -webkit-transition: -webkit-transform 2s;
-  -moz-transition: -moz-transform 2s;
-  -ms-transition: -ms-transform 2s;
-  -o-transition: -o-transform 2s;
-  transition: transform 2s;
+  -webkit-transition: -webkit-transform var(--odometer-duration, 2.2s)
+    cubic-bezier(0.645, 0.045, 0.355, 1);
+  -moz-transition: -moz-transform var(--odometer-duration, 2.2s)
+    cubic-bezier(0.645, 0.045, 0.355, 1);
+  -ms-transition: -ms-transform var(--odometer-duration, 2.2s)
+    cubic-bezier(0.645, 0.045, 0.355, 1);
+  -o-transition: -o-transform var(--odometer-duration, 2.2s)
+    cubic-bezier(0.645, 0.045, 0.355, 1);
+  transition: transform var(--odometer-duration, 2.2s)
+    cubic-bezier(0.645, 0.045, 0.355, 1);
 }
 .odometer.odometer-auto-theme.odometer-animating-down .odometer-ribbon-inner,
 .odometer.odometer-auto-theme.odometer-animating-up.odometer-animating
@@ -135,15 +140,21 @@
   -o-transform: translateY(-100%);
   transform: translateY(-100%);
 }
+
 .odometer.odometer-auto-theme.odometer-animating-down.odometer-animating
   .odometer-ribbon-inner,
 .odometer.odometer-theme-minimal.odometer-animating-down.odometer-animating
   .odometer-ribbon-inner {
-  -webkit-transition: -webkit-transform 2s;
-  -moz-transition: -moz-transform 2s;
-  -ms-transition: -ms-transform 2s;
-  -o-transition: -o-transform 2s;
-  transition: transform 2s;
+  -webkit-transition: -webkit-transform var(--odometer-duration, 2.2s)
+    cubic-bezier(0.645, 0.045, 0.355, 1);
+  -moz-transition: -moz-transform var(--odometer-duration, 2.2s)
+    cubic-bezier(0.645, 0.045, 0.355, 1);
+  -ms-transition: -ms-transform var(--odometer-duration, 2.2s)
+    cubic-bezier(0.645, 0.045, 0.355, 1);
+  -o-transition: -o-transform var(--odometer-duration, 2.2s)
+    cubic-bezier(0.645, 0.045, 0.355, 1);
+  transition: transform var(--odometer-duration, 2.2s)
+    cubic-bezier(0.645, 0.045, 0.355, 1);
   -webkit-transform: translateY(0);
   -moz-transform: translateY(0);
   -ms-transform: translateY(0);

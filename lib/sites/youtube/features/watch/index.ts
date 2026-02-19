@@ -231,10 +231,10 @@ const animation = {
 
       const { suffix, divisor, decimalPlaces } =
         viewCountParser.extractSuffix(newViewCountString);
-      const diff = Math.abs(toValue - fromValue);
-      const durationMs =
-        (diff < 10 ? 0.8 : Math.min(2.5, 1.0 + Math.log10(diff + 1) * 0.6)) *
-        1000;
+      // const diff = Math.abs(toValue - fromValue);
+      // const durationMs =
+      //   (diff < 10 ? 0.8 : Math.min(2.5, 1.0 + Math.log10(diff + 1) * 0.6)) *
+      //   1000;
 
       const suffixElement = document.getElementById("yt-enhancer-view-suffix");
       if (suffixElement) suffixElement.textContent = suffix;

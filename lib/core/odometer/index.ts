@@ -55,12 +55,6 @@ interface ParsedFormat {
   precision: number;
 }
 
-function createFromHTML(html: string): HTMLElement {
-  const div = document.createElement("div");
-  div.innerHTML = html;
-  return div.children[0] as HTMLElement;
-}
-
 function addClass(el: HTMLElement, name: string): void {
   const names = name.split(" ").filter(Boolean);
   for (const n of names) {
@@ -116,6 +110,26 @@ const FRAMERATE = 30;
 const MS_PER_FRAME = 1000 / FRAMERATE;
 const FRAMES_PER_VALUE = 2;
 const DIGIT_SPEEDBOOST = 0.5;
+
+const FONT_SIZE_PX = 16 * 1.6;
+const LINE_HEIGHT_PX = FONT_SIZE_PX * 2.4;
+const DURATION_PER_PX = 1.2;
+const MIN_DURATION_MS = 800;
+
+function easeInOutCubic(t: number): number {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+function computeDurationMs(
+  oldValue: number,
+  newValue: number,
+  maxDurationMs: number,
+): number {
+  const steps = Math.abs(newValue - oldValue);
+  const distancePx = steps * LINE_HEIGHT_PX;
+  const computed = distancePx * DURATION_PER_PX;
+  return Math.min(Math.max(computed, MIN_DURATION_MS), maxDurationMs);
+}
 
 export class Odometer {
   private el: HTMLElement;
@@ -234,7 +248,13 @@ export class Odometer {
       addClass(this.el, "odometer-animating-down");
     }
 
-    this.animate(cleaned);
+    const durationMs = computeDurationMs(
+      this.value,
+      cleaned,
+      this.options.duration,
+    );
+    this.el.style.setProperty("--odometer-duration", `${durationMs}ms`);
+    this.animate(cleaned, durationMs);
 
     setTimeout(() => {
       void this.el.offsetHeight;
@@ -251,15 +271,15 @@ export class Odometer {
     }
   }
 
-  private animate(newValue: number): void {
+  private animate(newValue: number, durationMs: number): void {
     if (!TRANSITION_SUPPORT) {
-      this.animateCount(newValue);
+      this.animateCount(newValue, durationMs);
     } else {
-      this.animateSlide(newValue);
+      this.animateSlide(newValue, durationMs);
     }
   }
 
-  private animateCount(newValue: number): void {
+  private animateCount(newValue: number, durationMs: number): void {
     if (this.animationId !== null) cancelAnimationFrame(this.animationId);
 
     const diff = newValue - this.value;
@@ -270,14 +290,14 @@ export class Odometer {
 
     const tick = (now: number) => {
       const elapsed = now - start;
-      if (elapsed >= this.options.duration) {
+      if (elapsed >= durationMs) {
         this.value = newValue;
         this.render();
         this.el.dispatchEvent(new Event("odometerdone"));
         return;
       }
 
-      const fraction = elapsed / this.options.duration;
+      const fraction = easeInOutCubic(elapsed / durationMs);
       const cur = startValue + diff * fraction;
       this.render(Math.round(cur));
       this.animationId = requestAnimationFrame(tick);
@@ -308,7 +328,7 @@ export class Odometer {
     this.resetFormat();
   }
 
-  private animateSlide(newValue: number): void {
+  private animateSlide(newValue: number, durationMs: number): void {
     let oldValue = this.value;
     const fractionalCount = this.getFractionalDigitCount(oldValue, newValue);
 
@@ -326,6 +346,7 @@ export class Odometer {
     const isCountingDown = diff < 0;
     let boosted = 0;
 
+    const maxValues = (durationMs / MS_PER_FRAME / FRAMES_PER_VALUE) | 0;
     const digitFrames: number[][] = [];
 
     for (let i = 0; i < digitCount; i++) {
@@ -334,9 +355,9 @@ export class Odometer {
       const dist = end - start;
       let frames: number[];
 
-      if (Math.abs(dist) > this.maxValues) {
+      if (Math.abs(dist) > maxValues) {
         const incr =
-          dist / (this.maxValues + this.maxValues * boosted * DIGIT_SPEEDBOOST);
+          dist / (maxValues + maxValues * boosted * DIGIT_SPEEDBOOST);
         frames = [];
         let cur = start;
         while ((dist > 0 && cur < end) || (dist < 0 && cur > end)) {
