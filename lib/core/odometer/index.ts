@@ -165,18 +165,16 @@ export class Odometer {
   private renderInside(): void {
     this.inside = document.createElement("div");
     this.inside.className = "odometer-inside";
-    this.el.innerHTML = "";
+    while (this.el.firstChild) this.el.removeChild(this.el.firstChild);
     this.el.appendChild(this.inside);
   }
 
   private cleanValue(val: string | number): number {
-    if (typeof val === "string") {
-      val = val.replace(this.format.radix ?? ".", "<radix>");
-      val = val.replace(/[.,]/g, "");
-      val = val.replace("<radix>", ".");
-      return roundTo(parseFloat(val) || 0, this.format.precision);
+    if (typeof val === "number") {
+      return roundTo(val, this.format.precision);
     }
-    return roundTo(val, this.format.precision);
+    const stripped = val.replace(/[^0-9.-]/g, "");
+    return roundTo(parseFloat(stripped) || 0, this.format.precision);
   }
 
   private bindTransitionEnd(): void {
@@ -209,7 +207,8 @@ export class Odometer {
     const renderValue = value ?? this.value;
 
     this.resetFormat();
-    this.inside.innerHTML = "";
+    while (this.inside.firstChild)
+      this.inside.removeChild(this.inside.firstChild);
 
     const theme = this.options.theme;
     const baseClasses = this.el.className
@@ -324,7 +323,8 @@ export class Odometer {
   private resetDigits(): void {
     this.digits = [];
     this.ribbons = {};
-    this.inside.innerHTML = "";
+    while (this.inside.firstChild)
+      this.inside.removeChild(this.inside.firstChild);
     this.resetFormat();
   }
 
@@ -396,7 +396,8 @@ export class Odometer {
         if (ribbonInner) this.ribbons[i] = ribbonInner;
       }
 
-      this.ribbons[i].innerHTML = "";
+      while (this.ribbons[i].firstChild)
+        this.ribbons[i].removeChild(this.ribbons[i].firstChild!);
 
       if (isCountingDown) {
         frames = [...frames].reverse();

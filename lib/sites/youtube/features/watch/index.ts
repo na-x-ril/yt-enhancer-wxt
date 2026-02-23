@@ -111,41 +111,77 @@ function runCleanup() {
 }
 
 const viewCountParser = {
-  parse: (viewCountStr: string): { count: number; formatted: string } => {
-    if (!viewCountStr) return { count: 0, formatted: "0" };
+  parseNumber: (viewCountStr: string): number => {
+    if (!viewCountStr) return 0;
 
-    const lowerStr = viewCountStr.toLowerCase();
+    const lower = viewCountStr.toLowerCase();
     let multiplier = 1;
-    if (lowerStr.includes("k") || lowerStr.includes("rb")) multiplier = 1000;
-    else if (lowerStr.includes("m") || lowerStr.includes("jt"))
+    if (lower.includes("k") || lower.includes("rb")) multiplier = 1_000;
+    else if (lower.includes("m") || lower.includes("jt"))
       multiplier = 1_000_000;
-    else if (lowerStr.includes("b") || lowerStr.includes("miliar"))
+    else if (lower.includes("b") || lower.includes("miliar"))
       multiplier = 1_000_000_000;
 
     const numberMatch = viewCountStr.match(/[\d.,]+/);
-    if (!numberMatch) return { count: 0, formatted: viewCountStr };
+    if (!numberMatch) return 0;
 
-    const num = parseFloat(numberMatch[0].replace(/,/g, ""));
+    const raw = numberMatch[0];
+    const normalized = viewCountParser.normalizeDecimalString(raw);
+    const num = parseFloat(normalized);
+    return isNaN(num) ? 0 : Math.floor(num * multiplier);
+  },
+
+  normalizeDecimalString: (raw: string): string => {
+    const dotCount = (raw.match(/\./g) ?? []).length;
+    const commaCount = (raw.match(/,/g) ?? []).length;
+
+    if (dotCount > 1) {
+      return raw.replace(/\./g, "");
+    }
+    if (commaCount > 1) {
+      return raw.replace(/,/g, "");
+    }
+    if (dotCount === 1 && commaCount === 1) {
+      return raw.lastIndexOf(".") > raw.lastIndexOf(",")
+        ? raw.replace(/,/g, "")
+        : raw.replace(/\./g, "").replace(",", ".");
+    }
+    if (commaCount === 1) {
+      const parts = raw.split(",");
+      return parts[1].length === 3
+        ? raw.replace(",", "")
+        : raw.replace(",", ".");
+    }
+    if (dotCount === 1) {
+      const parts = raw.split(".");
+      return parts[1].length === 3 ? raw.replace(".", "") : raw;
+    }
+
+    return raw;
+  },
+
+  parse: (viewCountStr: string): { count: number; formatted: string } => {
     return {
-      count: isNaN(num) ? 0 : Math.floor(num * multiplier),
+      count: viewCountParser.parseNumber(viewCountStr),
       formatted: viewCountStr,
     };
   },
+
   extractSuffix: (viewCountString: string) => {
     if (!viewCountString)
       return { number: 0, suffix: "", divisor: 1, decimalPlaces: 0 };
 
-    const lowerStr = viewCountString.toLowerCase();
+    const lower = viewCountString.toLowerCase();
     let divisor = 1;
     let decimalPlaces = 0;
 
-    if (lowerStr.includes("k") || lowerStr.includes("rb")) {
-      divisor = 1000;
+    if (lower.includes("k") || lower.includes("rb")) {
+      divisor = 1_000;
       decimalPlaces = 1;
-    } else if (lowerStr.includes("m") || lowerStr.includes("jt")) {
+    } else if (lower.includes("m") || lower.includes("jt")) {
       divisor = 1_000_000;
       decimalPlaces = 1;
-    } else if (lowerStr.includes("b") || lowerStr.includes("miliar")) {
+    } else if (lower.includes("b") || lower.includes("miliar")) {
       divisor = 1_000_000_000;
       decimalPlaces = 1;
     }
@@ -154,9 +190,13 @@ const viewCountParser = {
     const numberPart = numberMatch ? numberMatch[0] : "";
     const suffixPart = viewCountString.slice(numberPart.length).trim();
     const suffix = suffixPart ? ` ${suffixPart}` : "";
-    const parsed = viewCountParser.parse(viewCountString);
 
-    return { number: parsed.count, suffix, divisor, decimalPlaces };
+    return {
+      number: viewCountParser.parseNumber(viewCountString),
+      suffix,
+      divisor,
+      decimalPlaces,
+    };
   },
 };
 
