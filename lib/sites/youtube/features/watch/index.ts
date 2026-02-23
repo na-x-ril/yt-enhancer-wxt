@@ -24,15 +24,23 @@ import { Odometer } from "@/lib/core/odometer";
 
 interface State {
   id: string | null;
-  state: number | null;
+  state: VideoStateValue | null;
   player: YouTubePlayer | null;
-  isLiveNow: boolean;
   currentViewCount: number;
   currentDateText: string;
   lastSavedTime: number;
   isDestroyed: boolean;
   isCaptionActive: boolean;
 }
+
+const VideoState = {
+  VOD: 1,
+  PAST_LIVE: 2,
+  LIVE: 3,
+  UPCOMING: 4,
+} as const;
+
+type VideoStateValue = (typeof VideoState)[keyof typeof VideoState];
 
 interface Config {
   autoLoop: boolean;
@@ -45,7 +53,6 @@ const state: State = {
   id: null,
   state: null,
   player: null,
-  isLiveNow: false,
   currentViewCount: 0,
   currentDateText: "",
   lastSavedTime: 0,
@@ -74,7 +81,6 @@ function resetState() {
   state.id = null;
   state.state = null;
   state.player = null;
-  state.isLiveNow = false;
   state.currentViewCount = 0;
   state.currentDateText = "";
   state.lastSavedTime = 0;
@@ -156,7 +162,12 @@ const viewCountParser = {
 
 const timeTracking = {
   save: async () => {
-    if (state.isDestroyed || !state.player || !state.id || state.isLiveNow)
+    if (
+      state.isDestroyed ||
+      !state.player ||
+      !state.id ||
+      state.state === VideoState.LIVE
+    )
       return;
     try {
       const currentTime = state.player.getCurrentTime();
@@ -178,7 +189,12 @@ const timeTracking = {
     } catch {}
   },
   restore: async () => {
-    if (state.isDestroyed || !state.player || !state.id || state.isLiveNow)
+    if (
+      state.isDestroyed ||
+      !state.player ||
+      !state.id ||
+      state.state === VideoState.LIVE
+    )
       return;
     try {
       const key = `video_time_${state.id}`;
@@ -196,7 +212,7 @@ const timeTracking = {
     } catch {}
   },
   setup: (player: YouTubePlayer) => {
-    if (state.isDestroyed || state.isLiveNow) return null;
+    if (state.isDestroyed || state.state === VideoState.LIVE) return null;
     try {
       const handlers = {
         onPause: () => timeTracking.save(),
@@ -479,7 +495,7 @@ const ui = {
       const existing = document.getElementById("yt-enhancer-dvr-indicator");
       existing?.remove();
 
-      if (!state.isLiveNow || isDVREnabled) return;
+      if (state.state !== VideoState.LIVE || isDVREnabled) return;
 
       const timeWrapper = document.querySelector<HTMLElement>(
         "div.ytp-time-wrapper",
@@ -527,14 +543,13 @@ const videoData = {
     const liveDetails = microformat?.liveBroadcastDetails;
 
     if (liveDetails?.isLiveNow === true) {
-      state.state = 3;
-      state.isLiveNow = true;
+      state.state = VideoState.LIVE;
     } else if (liveDetails?.isLiveNow === false && !videoDetails.isUpcoming) {
-      state.state = 2;
+      state.state = VideoState.PAST_LIVE;
     } else if (liveDetails?.isLiveNow === false && videoDetails.isUpcoming) {
-      state.state = 4;
+      state.state = VideoState.UPCOMING;
     } else {
-      state.state = 1;
+      state.state = VideoState.VOD;
     }
   },
 
@@ -563,7 +578,8 @@ const videoData = {
       videoPrimaryInfo.videoPrimaryInfoRenderer?.viewCount
         .videoViewCountRenderer.viewCount;
 
-    return state.state === 4 || state.state === 3
+    return state.state === VideoState.UPCOMING ||
+      state.state === VideoState.LIVE
       ? (content?.runs?.map((r) => r.text).join("") ?? null)
       : (content?.simpleText ?? null);
   },
@@ -572,7 +588,7 @@ const videoData = {
     ytInitialData: InitialData,
     ytInitialPlayerResponse: InitialPlayerResponse,
   ) => {
-    if (state.state === 4) {
+    if (state.state === VideoState.UPCOMING) {
       return (
         ytInitialPlayerResponse.playabilityStatus.liveStreamability?.liveStreamabilityRenderer.offlineSlate?.liveStreamOfflineSlateRenderer.mainText.runs
           ?.map((r) => r.text)
@@ -587,7 +603,7 @@ const videoData = {
     if (!videoPrimaryInfo?.videoPrimaryInfoRenderer) return null;
 
     const content = videoPrimaryInfo.videoPrimaryInfoRenderer;
-    return state.state === 3
+    return state.state === VideoState.LIVE
       ? (content?.dateText?.simpleText ?? null)
       : (content?.relativeDateText?.simpleText ?? null);
   },
@@ -630,7 +646,7 @@ const videoData = {
         if (viewCount && dateText)
           await ui.displayVideoInfo(viewCount, dateText, isUpdate);
 
-        if (state.isLiveNow) {
+        if (state.state === VideoState.LIVE) {
           const isDVREnabled = videoData.getDVREnabled(
             ytInitialPlayerResponseObj,
           );
@@ -703,7 +719,7 @@ const eventHandlers = {
 
       if (state.player && !state.isDestroyed) {
         await playerFeatures.applyAll(state.player);
-        if (!state.isLiveNow) {
+        if (state.state !== VideoState.LIVE) {
           cleanup.timeTracking?.();
           cleanup.timeTracking = timeTracking.setup(state.player);
         }
@@ -774,7 +790,8 @@ export const watchFeature = {
 
     const [,] = await Promise.all([videoData.fetchAndLog(), handleVideo()]);
 
-    if (state.player && !state.isLiveNow && !state.isDestroyed) {
+    if (state.player && state.state !== VideoState.LIVE && !state.isDestroyed) {
+      cleanup.timeTracking?.();
       cleanup.timeTracking = timeTracking.setup(state.player);
       await timeTracking.restore();
     }
@@ -811,8 +828,6 @@ export const watchFeature = {
           handleVisibilityChange,
         ),
     );
-
-    await handleVideo();
 
     return () => runCleanup();
   },
