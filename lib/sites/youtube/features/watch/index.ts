@@ -200,18 +200,18 @@ const viewCountParser = {
   },
 };
 
+const canTrackTime = (): boolean =>
+  !state.isDestroyed &&
+  state.player !== null &&
+  state.id !== null &&
+  state.state !== VideoState.LIVE;
+
 const timeTracking = {
   save: async () => {
-    if (
-      state.isDestroyed ||
-      !state.player ||
-      !state.id ||
-      state.state === VideoState.LIVE
-    )
-      return;
+    if (!canTrackTime()) return;
     try {
-      const currentTime = state.player.getCurrentTime();
-      const duration = state.player.getDuration();
+      const currentTime = state.player!.getCurrentTime();
+      const duration = state.player!.getDuration();
       if (!currentTime || !duration) return;
 
       const key = `video_time_${state.id}`;
@@ -229,17 +229,11 @@ const timeTracking = {
     } catch {}
   },
   restore: async () => {
-    if (
-      state.isDestroyed ||
-      !state.player ||
-      !state.id ||
-      state.state === VideoState.LIVE
-    )
-      return;
+    if (!canTrackTime()) return;
     try {
       const key = `video_time_${state.id}`;
       const savedTime = await storageBridge.get(key);
-      const duration = state.player.getDuration();
+      const duration = state.player!.getDuration();
       if (!savedTime || !duration) return;
 
       if (savedTime < 30 || duration - savedTime < 30) {
@@ -247,7 +241,7 @@ const timeTracking = {
         return;
       }
 
-      state.player.seekTo(savedTime, true);
+      state.player!.seekTo(savedTime, true);
       console.log("Video seeked to:", savedTime);
     } catch {}
   },
@@ -255,9 +249,9 @@ const timeTracking = {
     if (state.isDestroyed || state.state === VideoState.LIVE) return null;
     try {
       const handlers = {
-        onPause: () => timeTracking.save(),
+        onPause: () => void timeTracking.save(),
         onStateChange: (s: number) =>
-          (s === 2 || s === 0) && timeTracking.save(),
+          (s === 2 || s === 0) && void timeTracking.save(),
       };
 
       player.addEventListener("onPause", handlers.onPause);
@@ -386,7 +380,7 @@ const networkIntercept = (() => {
           newDateText?.runs?.map((r) => r.text).join("");
 
         if (viewCountString || dateTextString) {
-          ui.displayVideoInfo(
+          void ui.displayVideoInfo(
             viewCountString ?? "",
             dateTextString ?? state.currentDateText,
             true,
@@ -504,27 +498,29 @@ const ui = {
       ]),
     );
 
-    button.onclick = async () => {
+    button.onclick = () => {
       if (state.isDestroyed) return;
-      try {
-        button.style.pointerEvents = "none";
-        button.style.opacity = "0.5";
-        const svg = button.querySelector<SVGElement>("svg");
-        if (svg) {
-          svg.style.transition = "transform 0.5s ease";
-          svg.style.transform = "rotate(360deg)";
-        }
-        await videoData.fetchAndLog(true);
-        setTimeout(() => {
-          if (state.isDestroyed) return;
+      void (async () => {
+        try {
+          button.style.pointerEvents = "none";
+          button.style.opacity = "0.5";
+          const svg = button.querySelector<SVGElement>("svg");
+          if (svg) {
+            svg.style.transition = "transform 0.5s ease";
+            svg.style.transform = "rotate(360deg)";
+          }
+          await videoData.fetchAndLog(true);
+          setTimeout(() => {
+            if (state.isDestroyed) return;
+            button.style.pointerEvents = "auto";
+            button.style.opacity = "1";
+            if (svg) svg.style.transform = "rotate(0deg)";
+          }, 500);
+        } catch {
           button.style.pointerEvents = "auto";
           button.style.opacity = "1";
-          if (svg) svg.style.transform = "rotate(0deg)";
-        }, 500);
-      } catch {
-        button.style.pointerEvents = "auto";
-        button.style.opacity = "1";
-      }
+        }
+      })();
     };
 
     return button;
@@ -778,7 +774,7 @@ const eventHandlers = {
       } else if (setting === "qualityService") {
         config.qualityService = value;
         if (value && config.quality)
-          playerFeatures.setQuality(state.player, config.quality);
+          void playerFeatures.setQuality(state.player, config.quality);
       } else if (setting === "autoCaption") {
         config.autoCaption = value;
         if (value && !state.isCaptionActive) {
@@ -797,7 +793,7 @@ const eventHandlers = {
       const { quality: newQuality } = (event as CustomEvent).detail;
       config.quality = newQuality;
       if (state.player && config.qualityService)
-        playerFeatures.setQuality(state.player, newQuality);
+        void playerFeatures.setQuality(state.player, newQuality);
     } catch {}
   },
 };
@@ -828,7 +824,7 @@ export const watchFeature = {
     await configManager.load();
     networkIntercept.setup();
 
-    const [,] = await Promise.all([videoData.fetchAndLog(), handleVideo()]);
+    await Promise.all([videoData.fetchAndLog(), handleVideo()]);
 
     if (state.player && state.state !== VideoState.LIVE && !state.isDestroyed) {
       cleanup.timeTracking?.();
@@ -836,8 +832,9 @@ export const watchFeature = {
       await timeTracking.restore();
     }
 
-    const handleBeforeUnload = () => timeTracking.save();
-    const handleVisibilityChange = () => document.hidden && timeTracking.save();
+    const handleBeforeUnload = () => void timeTracking.save();
+    const handleVisibilityChange = () =>
+      document.hidden && void timeTracking.save();
 
     window.addEventListener("beforeunload", handleBeforeUnload);
     window.addEventListener("yt-enhancer-setting", eventHandlers.setting);
