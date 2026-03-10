@@ -164,3 +164,8 @@
 .odometer.odometer-theme-minimal {
   line-height: inherit;
 }
+
+ytd-badge-supported-renderer.ytd-watch-metadata:nth-child(3)
+  > div:nth-child(1) {
+  display: none !important;
+}
