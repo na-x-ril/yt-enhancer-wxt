@@ -1,7 +1,7 @@
 // scripts/extract-yt-data.ts
 
-import { execSync } from "child_process";
-import { mkdirSync, writeFileSync } from "fs";
+import { $ } from "bun";
+import { mkdirSync } from "fs";
 import { join } from "path";
 
 const VIDEO_STATUS = ["nonlive", "live", "waslive", "upcoming"] as const;
@@ -81,23 +81,21 @@ function parseAndValidateJson(raw: string, label: string): object {
   }
 }
 
-function writeJson(dirPath: string, status: VideoStatus, data: object) {
+async function writeJson(dirPath: string, status: VideoStatus, data: object) {
   const filePath = join(dirPath, `${status}.json`);
-  writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
+  await Bun.write(filePath, JSON.stringify(data, null, 2));
   console.log(`Written: ${filePath}`);
   return filePath;
 }
 
-function runQuicktype(outputPath: string) {
-  const cmd = `quicktype ${BASE_DIR} -o ${outputPath} --just-types`;
-  console.log(`Running: ${cmd}`);
-
+async function runQuicktype(outputPath: string) {
+  console.log(`Running: quicktype ${BASE_DIR} -o ${outputPath} --just-types`);
   try {
-    execSync(cmd, { stdio: "inherit" });
+    await $`quicktype ${BASE_DIR} -o ${outputPath} --just-types`;
     console.log(`Types generated: ${outputPath}`);
   } catch {
     throw new Error(
-      "quicktype failed. Make sure it is installed: npm i -g quicktype",
+      "quicktype failed. Make sure it is installed: bun add -g quicktype",
     );
   }
 }
@@ -118,10 +116,10 @@ async function main() {
     "ytInitialPlayerResponse",
   );
 
-  writeJson(INITIAL_DATA_DIR, status, initialData);
-  writeJson(INITIAL_PLAYER_RESPONSE_DIR, status, initialPlayerResponse);
+  await writeJson(INITIAL_DATA_DIR, status, initialData);
+  await writeJson(INITIAL_PLAYER_RESPONSE_DIR, status, initialPlayerResponse);
 
-  runQuicktype(outputPath);
+  await runQuicktype(outputPath);
 
   console.log("\nDone.");
 }
