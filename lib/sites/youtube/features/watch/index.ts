@@ -12,7 +12,7 @@ import type {
   ResultsContent,
   UpdateDateTextAction,
   UpdateViewershipAction,
-} from "../../types/videoData";
+} from "../../types/VideoData";
 import {
   buildSVG,
   fetchData,
@@ -26,6 +26,7 @@ interface State {
   id: string | null;
   state: VideoStateValue | null;
   player: YouTubePlayer | null;
+  isVideoUnlisted: string;
   currentViewCount: number;
   currentDateText: string;
   lastSavedTime: number;
@@ -53,6 +54,7 @@ const state: State = {
   id: null,
   state: null,
   player: null,
+  isVideoUnlisted: "",
   currentViewCount: 0,
   currentDateText: "",
   lastSavedTime: 0,
@@ -81,6 +83,7 @@ function resetState() {
   state.id = null;
   state.state = null;
   state.player = null;
+  state.isVideoUnlisted = "";
   state.currentViewCount = 0;
   state.currentDateText = "";
   state.lastSavedTime = 0;
@@ -392,6 +395,13 @@ const networkIntercept = (() => {
 })();
 
 const ui = {
+  createSeparator: () => {
+    const separator = document.createElement("span");
+    separator.textContent = "•";
+
+    return separator;
+  },
+
   displayVideoInfo: async (
     viewCount: string,
     dateText: string,
@@ -474,14 +484,24 @@ const ui = {
         theme: "minimal",
       });
 
-      const separator = document.createElement("span");
-      separator.textContent = "•";
-
       const dateTextSpan = document.createElement("span");
       dateTextSpan.id = "yt-enhancer-date-text";
       dateTextSpan.textContent = dateText;
 
-      infoContainer.append(viewCountContainer, separator, dateTextSpan);
+      infoContainer.append(
+        viewCountContainer,
+        ui.createSeparator(),
+        dateTextSpan,
+      );
+
+      if (state.isVideoUnlisted !== "") {
+        const isUnlistedSpan = document.createElement("span");
+        isUnlistedSpan.id = "yt-enhancer-is-unlisted";
+        isUnlistedSpan.textContent = state.isVideoUnlisted;
+
+        infoContainer.append(ui.createSeparator(), isUnlistedSpan);
+      }
+
       infoWrapper.append(infoContainer, ui.createRefreshButton());
       titleElement.insertAdjacentElement("afterend", infoWrapper);
     } catch {}
@@ -605,8 +625,8 @@ const videoData = {
 
   getViewCount: (data: InitialData) => {
     const contents =
-      data.contents.twoColumnWatchNextResults.results.results.contents;
-    const videoPrimaryInfo = videoData.findVideoPrimaryInfo(contents);
+      data.contents.twoColumnWatchNextResults?.results.results.contents;
+    const videoPrimaryInfo = videoData.findVideoPrimaryInfo(contents!);
 
     if (!videoPrimaryInfo?.videoPrimaryInfoRenderer) return null;
 
@@ -618,6 +638,22 @@ const videoData = {
       state.state === VideoState.LIVE
       ? (content?.runs?.map((r) => r.text).join("") ?? null)
       : (content?.simpleText ?? null);
+  },
+
+  getListedStatus: (data: InitialData): string => {
+    if (state.state !== VideoState.VOD) return "";
+
+    const contents =
+      data.contents.twoColumnWatchNextResults?.results.results.contents;
+    const videoPrimaryInfo = videoData.findVideoPrimaryInfo(contents!);
+
+    if (!videoPrimaryInfo?.videoPrimaryInfoRenderer) return "";
+
+    const badges = videoPrimaryInfo.videoPrimaryInfoRenderer.badges;
+
+    const label = badges?.[0]?.metadataBadgeRenderer?.label;
+
+    return typeof label === "string" ? label : "";
   },
 
   getDateText: (
@@ -633,8 +669,9 @@ const videoData = {
     }
 
     const contents =
-      ytInitialData.contents.twoColumnWatchNextResults.results.results.contents;
-    const videoPrimaryInfo = videoData.findVideoPrimaryInfo(contents);
+      ytInitialData.contents.twoColumnWatchNextResults?.results.results
+        .contents;
+    const videoPrimaryInfo = videoData.findVideoPrimaryInfo(contents!);
 
     if (!videoPrimaryInfo?.videoPrimaryInfoRenderer) return null;
 
@@ -669,6 +706,8 @@ const videoData = {
           ytInitialDataObj,
           ytInitialPlayerResponseObj,
         );
+        state.isVideoUnlisted = videoData.getListedStatus(ytInitialDataObj);
+        console.log("Listed Status:", state.isVideoUnlisted);
 
         console.log(
           "Video Title:",

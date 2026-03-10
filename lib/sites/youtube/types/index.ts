@@ -5,7 +5,7 @@ import type {
   InitialData,
   InitialPlayerResponse,
   PlayerMicroformatRenderer,
-} from "./videoData";
+} from "./VideoData";
 import type { YouTubePlayer } from "./player";
 
 export type {
