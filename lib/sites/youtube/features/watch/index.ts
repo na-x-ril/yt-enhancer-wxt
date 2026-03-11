@@ -26,7 +26,7 @@ interface State {
   id: string | null;
   state: VideoStateValue | null;
   player: YouTubePlayer | null;
-  isVideoUnlisted: string;
+  videoBadges: string[];
   currentViewCount: number;
   currentDateText: string;
   lastSavedTime: number;
@@ -54,7 +54,7 @@ const state: State = {
   id: null,
   state: null,
   player: null,
-  isVideoUnlisted: "",
+  videoBadges: [],
   currentViewCount: 0,
   currentDateText: "",
   lastSavedTime: 0,
@@ -83,7 +83,7 @@ function resetState() {
   state.id = null;
   state.state = null;
   state.player = null;
-  state.isVideoUnlisted = "";
+  state.videoBadges = [];
   state.currentViewCount = 0;
   state.currentDateText = "";
   state.lastSavedTime = 0;
@@ -494,12 +494,12 @@ const ui = {
         dateTextSpan,
       );
 
-      if (state.isVideoUnlisted !== "") {
-        const isUnlistedSpan = document.createElement("span");
-        isUnlistedSpan.id = "yt-enhancer-is-unlisted";
-        isUnlistedSpan.textContent = state.isVideoUnlisted;
-
-        infoContainer.append(ui.createSeparator(), isUnlistedSpan);
+      if (state.videoBadges.length > 0) {
+        for (const label of state.videoBadges) {
+          const labelSpan = document.createElement("span");
+          labelSpan.textContent = label;
+          infoContainer.append(ui.createSeparator(), labelSpan);
+        }
       }
 
       infoWrapper.append(infoContainer, ui.createRefreshButton());
@@ -640,20 +640,22 @@ const videoData = {
       : (content?.simpleText ?? null);
   },
 
-  getListedStatus: (data: InitialData): string => {
-    if (state.state !== VideoState.VOD) return "";
+  getVideoBadges: (data: InitialData): string[] => {
+    if (state.state !== VideoState.VOD) return [];
 
     const contents =
       data.contents.twoColumnWatchNextResults?.results.results.contents;
     const videoPrimaryInfo = videoData.findVideoPrimaryInfo(contents!);
 
-    if (!videoPrimaryInfo?.videoPrimaryInfoRenderer) return "";
+    if (!videoPrimaryInfo?.videoPrimaryInfoRenderer) return [];
 
     const badges = videoPrimaryInfo.videoPrimaryInfoRenderer.badges;
 
-    const label = badges?.[0]?.metadataBadgeRenderer?.label;
+    if (!badges?.length) return [];
 
-    return typeof label === "string" ? label : "";
+    return badges
+      .map((badge) => badge.metadataBadgeRenderer.label)
+      .filter((label): label is string => typeof label === "string");
   },
 
   getDateText: (
@@ -706,8 +708,9 @@ const videoData = {
           ytInitialDataObj,
           ytInitialPlayerResponseObj,
         );
-        state.isVideoUnlisted = videoData.getListedStatus(ytInitialDataObj);
-        console.log("Listed Status:", state.isVideoUnlisted);
+
+        state.videoBadges = videoData.getVideoBadges(ytInitialDataObj);
+        console.log("Video badge(s):", state.videoBadges);
 
         console.log(
           "Video Title:",
