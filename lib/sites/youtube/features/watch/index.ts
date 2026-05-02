@@ -26,6 +26,7 @@ interface State {
   id: string | null;
   state: VideoStateValue | null;
   player: YouTubePlayer | null;
+  playerResponse: InitialPlayerResponse | null;
   videoBadges: string[];
   currentViewCount: number;
   currentDateText: string;
@@ -54,6 +55,7 @@ const state: State = {
   id: null,
   state: null,
   player: null,
+  playerResponse: null,
   videoBadges: [],
   currentViewCount: 0,
   currentDateText: "",
@@ -77,6 +79,57 @@ const cleanup: {
   timeTracking: null,
   odometer: null,
   handlers: [],
+};
+
+const QUALITY_RANK: Record<string, number> = {
+  highres: 8,
+  hd1440: 7,
+  hd1080: 6,
+  hd720: 5,
+  large: 4,
+  medium: 3,
+  small: 2,
+  tiny: 1,
+};
+
+const getAvailableQualities = (response: InitialPlayerResponse): string[] => {
+  const formats = [
+    ...(response.streamingData?.formats || []),
+    ...(response.streamingData?.adaptiveFormats || []),
+  ];
+  const qualities = new Set<string>();
+  formats.forEach((fmt) => {
+    if (fmt.quality && QUALITY_RANK[fmt.quality]) {
+      qualities.add(fmt.quality);
+    }
+  });
+  return Array.from(qualities);
+};
+
+const selectBestQuality = (preferred: string, available: string[]): string => {
+  if (available.length === 0) return preferred;
+  const preferredRank = QUALITY_RANK[preferred] ?? 0;
+  const availableWithRank = available
+    .map((q) => ({
+      quality: q,
+      rank: QUALITY_RANK[q] ?? 0,
+    }))
+    .sort((a, b) => a.rank - b.rank);
+  const minRank = availableWithRank[0].rank;
+  const maxRank = availableWithRank[availableWithRank.length - 1].rank;
+  if (preferredRank >= maxRank) {
+    return availableWithRank[availableWithRank.length - 1].quality;
+  }
+  if (preferredRank <= minRank) {
+    return availableWithRank[0].quality;
+  }
+  const exact = availableWithRank.find((item) => item.rank === preferredRank);
+  if (exact) return exact.quality;
+  return availableWithRank.reduce((prev, curr) =>
+    Math.abs(curr.rank - preferredRank) < Math.abs(prev.rank - preferredRank)
+      ? curr
+      : prev,
+  ).quality;
 };
 
 function resetState() {
@@ -698,6 +751,8 @@ const videoData = {
           data.ytInitialPlayerResponse,
         );
 
+        state.playerResponse = ytInitialPlayerResponseObj;
+
         videoData.setState(
           ytInitialPlayerResponseObj.microformat.playerMicroformatRenderer,
           ytInitialPlayerResponseObj.videoDetails,
@@ -755,7 +810,14 @@ const playerFeatures = {
   setQuality: async (player: YouTubePlayer, quality: string) => {
     if (state.isDestroyed) return;
     try {
-      if (config.qualityService) await player.setPlaybackQualityRange(quality);
+      if (config.qualityService) {
+        const available = getAvailableQualities(state.playerResponse!);
+        const finalQuality = selectBestQuality(quality, available);
+        console.log(
+          `Requested: ${quality}, Available: [${available.join(", ")}], Selected: ${finalQuality}`,
+        );
+        await player.setPlaybackQualityRange(finalQuality);
+      }
     } catch {}
   },
   caption: (player: YouTubePlayer) => {
