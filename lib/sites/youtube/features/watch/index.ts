@@ -795,11 +795,21 @@ const videoData = {
 const playerFeatures = {
   applyAll: async (player: YouTubePlayer) => {
     if (state.isDestroyed) return;
-    try {
-      playerFeatures.loop(player);
-      playerFeatures.caption(player);
-      await playerFeatures.setQuality(player, config.quality);
-    } catch {}
+    const maxRetries = 5;
+    const delayMs = 500;
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      if (state.isDestroyed) return;
+      try {
+        playerFeatures.loop(player);
+        playerFeatures.caption(player);
+        await playerFeatures.setQuality(player, config.quality);
+        return;
+      } catch {
+        if (attempt < maxRetries - 1) {
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+        }
+      }
+    }
   },
   loop: (player: YouTubePlayer) => {
     if (state.isDestroyed) return;
@@ -808,17 +818,10 @@ const playerFeatures = {
     } catch {}
   },
   setQuality: async (player: YouTubePlayer, quality: string) => {
-    if (state.isDestroyed) return;
-    try {
-      if (config.qualityService) {
-        const available = getAvailableQualities(state.playerResponse!);
-        const finalQuality = selectBestQuality(quality, available);
-        console.log(
-          `Requested: ${quality}, Available: [${available.join(", ")}], Selected: ${finalQuality}`,
-        );
-        await player.setPlaybackQualityRange(finalQuality);
-      }
-    } catch {}
+    if (state.isDestroyed || !config.qualityService) return;
+    const available = getAvailableQualities(state.playerResponse!);
+    const finalQuality = selectBestQuality(quality, available);
+    await player.setPlaybackQualityRange(finalQuality);
   },
   caption: (player: YouTubePlayer) => {
     if (state.isDestroyed) return;
