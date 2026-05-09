@@ -38,7 +38,9 @@ export default defineContentScript({
                 }),
               );
             }
-          } catch {}
+          } catch (error) {
+            console.warn("Failed to parse metadata response:", error);
+          }
         }
 
         return response;

@@ -139,7 +139,6 @@ export class Odometer {
   private format!: ParsedFormat;
   private digits: HTMLElement[] = [];
   private ribbons: Record<number, HTMLElement> = {};
-  private maxValues: number;
   private transitionEndBound = false;
   private animationId: number | null = null;
 
@@ -153,9 +152,6 @@ export class Odometer {
     };
 
     this.el = options.el;
-    this.maxValues =
-      (this.options.duration / MS_PER_FRAME / FRAMES_PER_VALUE) | 0;
-
     this.format = parseFormat(this.options.format);
     this.value = this.cleanValue(String(this.options.value ?? ""));
     this.renderInside();
@@ -189,9 +185,14 @@ export class Odometer {
           if (renderEnqueued) return;
           renderEnqueued = true;
           setTimeout(() => {
-            this.render();
-            renderEnqueued = false;
-            this.el.dispatchEvent(new Event("odometerdone"));
+            try {
+              this.render();
+              this.el.dispatchEvent(new Event("odometerdone"));
+            } catch (error) {
+              console.warn("[Odometer] Transition end render error:", error);
+            } finally {
+              renderEnqueued = false;
+            }
           }, 0);
         },
         false,
@@ -344,9 +345,9 @@ export class Odometer {
 
     const digitCount = this.getDigitCount(oldValue, newValue);
     const isCountingDown = diff < 0;
+    const maxValues = (durationMs / MS_PER_FRAME / FRAMES_PER_VALUE) | 0;
     let boosted = 0;
 
-    const maxValues = (durationMs / MS_PER_FRAME / FRAMES_PER_VALUE) | 0;
     const digitFrames: number[][] = [];
 
     for (let i = 0; i < digitCount; i++) {
@@ -489,16 +490,5 @@ export class Odometer {
     if (valueEl) valueEl.textContent = value;
     this.digits.push(digit);
     this.insertDigit(digit);
-  }
-
-  static init(selector = ".odometer"): Odometer[] {
-    const elements = document.querySelectorAll<HTMLElement>(selector);
-    return Array.from(elements).map(
-      (el) =>
-        new Odometer({
-          el,
-          value: parseFloat(el.innerText || el.textContent || "0"),
-        }),
-    );
   }
 }

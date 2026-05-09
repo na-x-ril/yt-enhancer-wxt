@@ -3,42 +3,48 @@
 import type { Feature } from "../types/feature";
 import { getVideoId } from "@/lib/core/utils";
 
-let activeFeature: {
-  destroy?: () => void;
+interface ActiveFeature {
   feature: Feature;
-  videoId?: string | null;
-} | null = null;
+  videoId: string | null;
+  destroy?: () => void;
+}
 
-export async function syncFeatures(features: Feature[]) {
-  const path = location.pathname;
-  const currentVideoId = getVideoId();
-  const nextFeature = features.find((f) => f.match(path)) || null;
+export class FeatureController {
+  private active: ActiveFeature | null = null;
 
-  const isSameVideo =
-    activeFeature?.feature === nextFeature &&
-    activeFeature?.videoId === currentVideoId;
+  async sync(features: Feature[]): Promise<void> {
+    const path = location.pathname;
+    const currentVideoId = getVideoId();
+    const nextFeature = features.find((f) => f.match(path)) ?? null;
 
-  if (isSameVideo) return;
+    const isSameVideo =
+      this.active?.feature === nextFeature &&
+      this.active?.videoId === currentVideoId;
 
-  if (activeFeature?.destroy) activeFeature.destroy();
+    if (isSameVideo) return;
 
-  if (!nextFeature) {
-    activeFeature = null;
-    return;
+    this.active?.destroy?.();
+
+    if (!nextFeature) {
+      this.active = null;
+      return;
+    }
+
+    const cleanupOrPromise = nextFeature.init?.();
+    const cleanup =
+      cleanupOrPromise instanceof Promise
+        ? await cleanupOrPromise
+        : (cleanupOrPromise as (() => void) | undefined);
+
+    this.active = {
+      feature: nextFeature,
+      videoId: currentVideoId,
+      destroy: cleanup,
+    };
   }
 
-  const cleanupOrPromise = nextFeature.init?.();
-  let cleanup: (() => void) | undefined;
-
-  if (cleanupOrPromise instanceof Promise) {
-    cleanup = await cleanupOrPromise;
-  } else {
-    cleanup = cleanupOrPromise as (() => void) | undefined;
+  destroyActive(): void {
+    this.active?.destroy?.();
+    this.active = null;
   }
-
-  activeFeature = {
-    destroy: cleanup,
-    feature: nextFeature,
-    videoId: currentVideoId,
-  };
 }

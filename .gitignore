@@ -25,3 +25,5 @@ web-ext.config.ts
 *.sln
 *.sw?
 .dev
+.zed/
+lib/sites/youtube/features/watch/index.dev.ts

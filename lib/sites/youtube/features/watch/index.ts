@@ -22,6 +22,15 @@ import {
 } from "@/lib/core/utils";
 import { Odometer } from "@/lib/core/odometer";
 
+const VideoState = {
+  VOD: 1,
+  PAST_LIVE: 2,
+  LIVE: 3,
+  UPCOMING: 4,
+} as const;
+
+type VideoStateValue = (typeof VideoState)[keyof typeof VideoState];
+
 interface State {
   id: string | null;
   state: VideoStateValue | null;
@@ -35,51 +44,12 @@ interface State {
   isCaptionActive: boolean;
 }
 
-const VideoState = {
-  VOD: 1,
-  PAST_LIVE: 2,
-  LIVE: 3,
-  UPCOMING: 4,
-} as const;
-
-type VideoStateValue = (typeof VideoState)[keyof typeof VideoState];
-
 interface Config {
   autoLoop: boolean;
   autoCaption: boolean;
   qualityService: boolean;
   quality: string;
 }
-
-const state: State = {
-  id: null,
-  state: null,
-  player: null,
-  playerResponse: null,
-  videoBadges: [],
-  currentViewCount: 0,
-  currentDateText: "",
-  lastSavedTime: 0,
-  isDestroyed: false,
-  isCaptionActive: false,
-};
-
-const config: Config = {
-  autoLoop: true,
-  autoCaption: true,
-  qualityService: true,
-  quality: "hd1080",
-};
-
-const cleanup: {
-  timeTracking: (() => void) | null;
-  odometer: Odometer | null;
-  handlers: Array<() => void>;
-} = {
-  timeTracking: null,
-  odometer: null,
-  handlers: [],
-};
 
 const QUALITY_RANK: Record<string, number> = {
   highres: 8,
@@ -92,152 +62,125 @@ const QUALITY_RANK: Record<string, number> = {
   tiny: 1,
 };
 
+const DEFAULT_CONFIG: Config = {
+  autoLoop: true,
+  autoCaption: true,
+  qualityService: true,
+  quality: "hd1080",
+};
+
 const getAvailableQualities = (response: InitialPlayerResponse): string[] => {
   const formats = [
-    ...(response.streamingData?.formats || []),
-    ...(response.streamingData?.adaptiveFormats || []),
+    ...(response.streamingData?.formats ?? []),
+    ...(response.streamingData?.adaptiveFormats ?? []),
   ];
   const qualities = new Set<string>();
-  formats.forEach((fmt) => {
+  for (const fmt of formats) {
     if (fmt.quality && QUALITY_RANK[fmt.quality]) {
       qualities.add(fmt.quality);
     }
-  });
+  }
   return Array.from(qualities);
 };
 
 const selectBestQuality = (preferred: string, available: string[]): string => {
   if (available.length === 0) return preferred;
+
   const preferredRank = QUALITY_RANK[preferred] ?? 0;
-  const availableWithRank = available
-    .map((q) => ({
-      quality: q,
-      rank: QUALITY_RANK[q] ?? 0,
-    }))
+  const sorted = available
+    .map((q) => ({ quality: q, rank: QUALITY_RANK[q] ?? 0 }))
     .sort((a, b) => a.rank - b.rank);
-  const minRank = availableWithRank[0].rank;
-  const maxRank = availableWithRank[availableWithRank.length - 1].rank;
-  if (preferredRank >= maxRank) {
-    return availableWithRank[availableWithRank.length - 1].quality;
-  }
-  if (preferredRank <= minRank) {
-    return availableWithRank[0].quality;
-  }
-  const exact = availableWithRank.find((item) => item.rank === preferredRank);
+
+  const minRank = sorted[0].rank;
+  const maxRank = sorted[sorted.length - 1].rank;
+
+  if (preferredRank >= maxRank) return sorted[sorted.length - 1].quality;
+  if (preferredRank <= minRank) return sorted[0].quality;
+
+  const exact = sorted.find((item) => item.rank === preferredRank);
   if (exact) return exact.quality;
-  return availableWithRank.reduce((prev, curr) =>
+
+  return sorted.reduce((prev, curr) =>
     Math.abs(curr.rank - preferredRank) < Math.abs(prev.rank - preferredRank)
       ? curr
       : prev,
   ).quality;
 };
 
-function resetState() {
-  state.id = null;
-  state.state = null;
-  state.player = null;
-  state.videoBadges = [];
-  state.currentViewCount = 0;
-  state.currentDateText = "";
-  state.lastSavedTime = 0;
-  state.isDestroyed = false;
-  state.isCaptionActive = false;
-}
-
-function runCleanup() {
-  state.isDestroyed = true;
-
-  cleanup.timeTracking?.();
-  cleanup.timeTracking = null;
-
-  cleanup.odometer?.destroy();
-  cleanup.odometer = null;
-
-  cleanup.handlers.forEach((fn) => {
-    try {
-      fn();
-    } catch {}
-  });
-  cleanup.handlers = [];
-
-  document.getElementById("yt-enhancer-video-info")?.remove();
-  document.getElementById("yt-enhancer-dvr-indicator")?.remove();
-
-  resetState();
-}
-
-const viewCountParser = {
-  parseNumber: (viewCountStr: string): number => {
-    if (!viewCountStr) return 0;
-
-    const lower = viewCountStr.toLowerCase();
-    let multiplier = 1;
-    if (lower.includes("k") || lower.includes("rb")) multiplier = 1_000;
-    else if (lower.includes("m") || lower.includes("jt"))
-      multiplier = 1_000_000;
-    else if (lower.includes("b") || lower.includes("miliar"))
-      multiplier = 1_000_000_000;
-
-    const numberMatch = viewCountStr.match(/[\d.,]+/);
-    if (!numberMatch) return 0;
-
-    const raw = numberMatch[0];
-    const normalized = viewCountParser.normalizeDecimalString(raw);
-    const num = parseFloat(normalized);
-    return isNaN(num) ? 0 : Math.floor(num * multiplier);
-  },
-
-  normalizeDecimalString: (raw: string): string => {
+class ViewCountParser {
+  private normalizeDecimalString(raw: string): string {
     const dotCount = (raw.match(/\./g) ?? []).length;
     const commaCount = (raw.match(/,/g) ?? []).length;
 
-    if (dotCount > 1) {
-      return raw.replace(/\./g, "");
-    }
-    if (commaCount > 1) {
-      return raw.replace(/,/g, "");
-    }
+    if (dotCount > 1) return raw.replace(/\./g, "");
+    if (commaCount > 1) return raw.replace(/,/g, "");
+
     if (dotCount === 1 && commaCount === 1) {
       return raw.lastIndexOf(".") > raw.lastIndexOf(",")
         ? raw.replace(/,/g, "")
         : raw.replace(/\./g, "").replace(",", ".");
     }
+
     if (commaCount === 1) {
       const parts = raw.split(",");
       return parts[1].length === 3
         ? raw.replace(",", "")
         : raw.replace(",", ".");
     }
+
     if (dotCount === 1) {
       const parts = raw.split(".");
       return parts[1].length === 3 ? raw.replace(".", "") : raw;
     }
 
     return raw;
-  },
+  }
 
-  parse: (viewCountStr: string): { count: number; formatted: string } => {
-    return {
-      count: viewCountParser.parseNumber(viewCountStr),
-      formatted: viewCountStr,
-    };
-  },
+  public parseNumber(viewCountStr: string): number {
+    if (!viewCountStr) return 0;
 
-  extractSuffix: (viewCountString: string) => {
-    if (!viewCountString)
+    const lower = viewCountStr.toLowerCase();
+    let multiplier = 1;
+
+    if (/\b(rb)\b/.test(lower) || /\bk\b/.test(lower)) multiplier = 1_000;
+    else if (/\b(jt)\b/.test(lower) || /\bm\b/.test(lower))
+      multiplier = 1_000_000;
+    else if (/\b(miliar)\b/.test(lower) || /\bb\b/.test(lower))
+      multiplier = 1_000_000_000;
+
+    const numberMatch = viewCountStr.match(/[\d.,]+/);
+    if (!numberMatch) return 0;
+
+    const normalized = this.normalizeDecimalString(numberMatch[0]);
+    const num = parseFloat(normalized);
+    return isNaN(num) ? 0 : Math.floor(num * multiplier);
+  }
+
+  parse(viewCountStr: string): { count: number; formatted: string } {
+    return { count: this.parseNumber(viewCountStr), formatted: viewCountStr };
+  }
+
+  public extractSuffix(viewCountString: string): {
+    number: number;
+    suffix: string;
+    divisor: number;
+    decimalPlaces: number;
+  } {
+    if (!viewCountString) {
       return { number: 0, suffix: "", divisor: 1, decimalPlaces: 0 };
+    }
 
     const lower = viewCountString.toLowerCase();
     let divisor = 1;
     let decimalPlaces = 0;
 
-    if (lower.includes("k") || lower.includes("rb")) {
+    if (/\b(rb)\b/.test(lower) || /\bk\b/.test(lower)) {
       divisor = 1_000;
       decimalPlaces = 1;
-    } else if (lower.includes("m") || lower.includes("jt")) {
+    } else if (/\b(jt)\b/.test(lower) || /\bm\b/.test(lower)) {
       divisor = 1_000_000;
       decimalPlaces = 1;
-    } else if (lower.includes("b") || lower.includes("miliar")) {
+    } else if (/\b(miliar)\b/.test(lower) || /\bb\b/.test(lower)) {
       divisor = 1_000_000_000;
       decimalPlaces = 1;
     }
@@ -248,48 +191,386 @@ const viewCountParser = {
     const suffix = suffixPart ? ` ${suffixPart}` : "";
 
     return {
-      number: viewCountParser.parseNumber(viewCountString),
+      number: this.parseNumber(viewCountString),
       suffix,
       divisor,
       decimalPlaces,
     };
-  },
-};
+  }
+}
 
-const canTrackTime = (): boolean =>
-  !state.isDestroyed &&
-  state.player !== null &&
-  state.id !== null &&
-  state.state !== VideoState.LIVE;
+class WatchFeature {
+  private state: State = this.createInitialState();
+  private config: Config = { ...DEFAULT_CONFIG };
+  private odometer: Odometer | null = null;
+  private timeTrackingCleanup: (() => void) | null = null;
+  private cleanupHandlers: Array<() => void> = [];
+  private metadataListenerAttached = false;
+  private readonly parser = new ViewCountParser();
 
-const timeTracking = {
-  save: async () => {
-    if (!canTrackTime()) return;
+  private createInitialState(): State {
+    return {
+      id: null,
+      state: null,
+      player: null,
+      playerResponse: null,
+      videoBadges: [],
+      currentViewCount: 0,
+      currentDateText: "",
+      lastSavedTime: 0,
+      isDestroyed: false,
+      isCaptionActive: false,
+    };
+  }
+
+  // ─── Lifecycle ────────────────────────────────────────────────────────────
+
+  async init(): Promise<() => void> {
+    const currentId = getVideoId();
+    const previousId = this.state.id;
+
+    if (previousId && previousId !== currentId) {
+      console.log(`[WatchFeature] Video changed: ${previousId} → ${currentId}`);
+      this.destroy();
+    }
+
+    this.state = this.createInitialState();
+    this.state.id = currentId;
+
+    await this.loadConfig();
+    this.setupMetadataListener();
+
+    await Promise.all([this.fetchAndLogVideoData(), this.handleVideo()]);
+
+    if (
+      this.state.player &&
+      this.state.state !== VideoState.LIVE &&
+      !this.state.isDestroyed
+    ) {
+      this.timeTrackingCleanup = this.setupTimeTracking(this.state.player);
+      await this.restoreTime();
+    }
+
+    this.registerEventListeners();
+
+    return () => this.destroy();
+  }
+
+  destroy(): void {
+    this.state.isDestroyed = true;
+
+    this.timeTrackingCleanup?.();
+    this.timeTrackingCleanup = null;
+
+    this.odometer?.destroy();
+    this.odometer = null;
+
+    for (const fn of this.cleanupHandlers) {
+      try {
+        fn();
+      } catch (error) {
+        console.warn("[WatchFeature] Cleanup error:", error);
+      }
+    }
+    this.cleanupHandlers = [];
+
+    document.getElementById("yt-enhancer-video-info")?.remove();
+    document.getElementById("yt-enhancer-dvr-indicator")?.remove();
+
+    this.state = this.createInitialState();
+    this.metadataListenerAttached = false;
+  }
+
+  // ─── Config ───────────────────────────────────────────────────────────────
+
+  private async loadConfig(): Promise<void> {
     try {
-      const currentTime = state.player!.getCurrentTime();
-      const duration = state.player!.getDuration();
-      if (!currentTime || !duration) return;
+      const saved = await storageBridge.get("dropdown_config");
+      if (saved) {
+        this.config.autoLoop = saved.autoLoop ?? true;
+        this.config.qualityService = saved.qualityService ?? true;
+        this.config.autoCaption = saved.autoCaption ?? true;
+        this.config.quality = saved.preferredQuality ?? "hd1080";
+      }
+    } catch (error) {
+      console.warn("[WatchFeature] Failed to load config:", error);
+    }
+  }
 
-      const key = `video_time_${state.id}`;
-      if (currentTime < 30 || duration - currentTime < 30) {
-        await storageBridge.remove(key);
-        state.lastSavedTime = 0;
+  // ─── Event Listeners ──────────────────────────────────────────────────────
+
+  private registerEventListeners(): void {
+    const handleBeforeUnload = () => void this.saveTime();
+    const handleVisibilityChange = () =>
+      document.hidden && void this.saveTime();
+    const handleRefresh = () => void this.onRefresh();
+    const handleSetting = (e: Event) => this.onSetting(e);
+    const handleQuality = (e: Event) => this.onQuality(e);
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener("yt-enhancer-refresh", handleRefresh);
+    window.addEventListener("yt-enhancer-setting", handleSetting);
+    window.addEventListener("yt-enhancer-quality", handleQuality);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    this.cleanupHandlers.push(
+      () => window.removeEventListener("beforeunload", handleBeforeUnload),
+      () => window.removeEventListener("yt-enhancer-refresh", handleRefresh),
+      () => window.removeEventListener("yt-enhancer-setting", handleSetting),
+      () => window.removeEventListener("yt-enhancer-quality", handleQuality),
+      () =>
+        document.removeEventListener(
+          "visibilitychange",
+          handleVisibilityChange,
+        ),
+    );
+  }
+
+  private setupMetadataListener(): void {
+    if (this.metadataListenerAttached) return;
+    this.metadataListenerAttached = true;
+
+    window.addEventListener("yt-enhancer-metadata-update", (event) => {
+      if (this.state.isDestroyed) return;
+      const { actions } = (
+        event as CustomEvent<{
+          actions: Array<UpdateViewershipAction | UpdateDateTextAction>;
+        }>
+      ).detail;
+      this.handleMetadataUpdate(actions);
+    });
+  }
+
+  // ─── Event Handlers ───────────────────────────────────────────────────────
+
+  private async onRefresh(): Promise<void> {
+    if (this.state.isDestroyed) return;
+    try {
+      const currentId = getVideoId();
+      if (currentId !== this.state.id) {
+        this.destroy();
         return;
       }
 
-      if (Math.abs(currentTime - state.lastSavedTime) >= 3) {
-        await storageBridge.set(key, currentTime);
-        state.lastSavedTime = currentTime;
-        console.log("Last saved time:", state.lastSavedTime);
+      if (!this.state.player) {
+        this.state.player = await waitForPlayer();
       }
-    } catch {}
-  },
-  restore: async () => {
-    if (!canTrackTime()) return;
+
+      if (this.state.player && !this.state.isDestroyed) {
+        await this.applyPlayerFeatures(this.state.player);
+        if (this.state.state !== VideoState.LIVE) {
+          this.timeTrackingCleanup?.();
+          this.timeTrackingCleanup = this.setupTimeTracking(this.state.player);
+        }
+      }
+    } catch (error) {
+      console.warn("[WatchFeature] Refresh error:", error);
+    }
+  }
+
+  private onSetting(event: Event): void {
+    if (this.state.isDestroyed) return;
     try {
-      const key = `video_time_${state.id}`;
+      const { setting, value } = (event as CustomEvent).detail;
+      if (!this.state.player) return;
+
+      if (setting === "autoLoop") {
+        this.config.autoLoop = value;
+        this.state.player.setLoopVideo(value);
+      } else if (setting === "qualityService") {
+        this.config.qualityService = value;
+        if (value && this.config.quality) {
+          void this.setQuality(this.state.player, this.config.quality);
+        }
+      } else if (setting === "autoCaption") {
+        this.config.autoCaption = value;
+        if (value && !this.state.isCaptionActive) {
+          this.state.player.toggleSubtitlesOn();
+          this.state.isCaptionActive = true;
+        } else if (!value && this.state.isCaptionActive) {
+          this.state.player.toggleSubtitles();
+          this.state.isCaptionActive = false;
+        }
+      }
+    } catch (error) {
+      console.warn("[WatchFeature] Setting handler error:", error);
+    }
+  }
+
+  private onQuality(event: Event): void {
+    if (this.state.isDestroyed) return;
+    try {
+      const { quality: newQuality } = (event as CustomEvent).detail;
+      this.config.quality = newQuality;
+      if (this.state.player && this.config.qualityService) {
+        void this.setQuality(this.state.player, newQuality);
+      }
+    } catch (error) {
+      console.warn("[WatchFeature] Quality handler error:", error);
+    }
+  }
+
+  private handleMetadataUpdate(
+    actions: Array<UpdateViewershipAction | UpdateDateTextAction>,
+  ): void {
+    if (this.state.isDestroyed) return;
+    try {
+      const viewershipAction = actions.find(
+        (action): action is UpdateViewershipAction =>
+          "updateViewershipAction" in action,
+      );
+      const dateTextAction = actions.find(
+        (action): action is UpdateDateTextAction =>
+          "updateDateTextAction" in action,
+      );
+
+      const renderer =
+        viewershipAction?.updateViewershipAction?.viewCount
+          ?.videoViewCountRenderer;
+
+      const viewCountString =
+        renderer?.viewCount?.simpleText ??
+        renderer?.viewCount?.runs?.map((r) => r.text).join("");
+
+      const originalViewCount = renderer?.originalViewCount
+        ? parseInt(renderer.originalViewCount, 10)
+        : null;
+
+      const newDateText = dateTextAction?.updateDateTextAction?.dateText;
+      const dateTextString =
+        newDateText?.simpleText ??
+        newDateText?.runs?.map((r) => r.text).join("");
+
+      if (viewCountString || dateTextString) {
+        void this.displayVideoInfo(
+          viewCountString ?? "",
+          dateTextString ?? this.state.currentDateText,
+          true,
+          originalViewCount ?? undefined,
+        );
+      }
+    } catch (error) {
+      console.warn("[WatchFeature] Metadata update error:", error);
+    }
+  }
+
+  // ─── Player Features ──────────────────────────────────────────────────────
+
+  private async handleVideo(): Promise<void> {
+    if (this.state.isDestroyed) return;
+    try {
+      if (!this.state.player) {
+        this.state.player = await waitForPlayer();
+      }
+      if (this.state.player && !this.state.isDestroyed) {
+        await this.applyPlayerFeatures(this.state.player);
+      }
+    } catch (error) {
+      console.warn("[WatchFeature] Handle video error:", error);
+    }
+  }
+
+  private async applyPlayerFeatures(player: YouTubePlayer): Promise<void> {
+    if (this.state.isDestroyed) return;
+    const maxRetries = 5;
+    const delayMs = 500;
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      if (this.state.isDestroyed) return;
+      try {
+        this.applyLoop(player);
+        this.applyCaption(player);
+        await this.setQuality(player, this.config.quality);
+        return;
+      } catch (error) {
+        if (attempt < maxRetries - 1) {
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+        } else {
+          console.warn(
+            "[WatchFeature] Apply player features failed after retries:",
+            error,
+          );
+        }
+      }
+    }
+  }
+
+  private applyLoop(player: YouTubePlayer): void {
+    if (this.state.isDestroyed) return;
+    try {
+      if (this.config.autoLoop) player.setLoopVideo(true);
+    } catch (error) {
+      console.warn("[WatchFeature] Apply loop error:", error);
+    }
+  }
+
+  private applyCaption(player: YouTubePlayer): void {
+    if (this.state.isDestroyed) return;
+    try {
+      if (this.config.autoCaption) {
+        player.toggleSubtitlesOn();
+        this.state.isCaptionActive = true;
+      }
+    } catch (error) {
+      console.warn("[WatchFeature] Apply caption error:", error);
+    }
+  }
+
+  private async setQuality(
+    player: YouTubePlayer,
+    quality: string,
+  ): Promise<void> {
+    if (this.state.isDestroyed || !this.config.qualityService) return;
+    const available = getAvailableQualities(this.state.playerResponse!);
+    const finalQuality = selectBestQuality(quality, available);
+    await player.setPlaybackQualityRange(finalQuality);
+  }
+
+  // ─── Time Tracking ────────────────────────────────────────────────────────
+
+  private canTrackTime(): boolean {
+    return (
+      !this.state.isDestroyed &&
+      this.state.player !== null &&
+      this.state.id !== null &&
+      this.state.state !== VideoState.LIVE
+    );
+  }
+
+  private async saveTime(): Promise<void> {
+    if (!this.canTrackTime()) return;
+    try {
+      const currentTime = this.state.player!.getCurrentTime();
+      const duration = this.state.player!.getDuration();
+      if (!currentTime || !duration) return;
+
+      const key = `video_time_${this.state.id}`;
+
+      if (currentTime < 30 || duration - currentTime < 30) {
+        await storageBridge.remove(key);
+        this.state.lastSavedTime = 0;
+        return;
+      }
+
+      if (Math.abs(currentTime - this.state.lastSavedTime) >= 3) {
+        await storageBridge.set(key, currentTime);
+        this.state.lastSavedTime = currentTime;
+        console.log(
+          "[WatchFeature] Last saved time:",
+          this.state.lastSavedTime,
+        );
+      }
+    } catch (error) {
+      console.warn("[WatchFeature] Save time error:", error);
+    }
+  }
+
+  private async restoreTime(): Promise<void> {
+    if (!this.canTrackTime()) return;
+    try {
+      const key = `video_time_${this.state.id}`;
       const savedTime = await storageBridge.get(key);
-      const duration = state.player!.getDuration();
+      const duration = this.state.player!.getDuration();
       if (!savedTime || !duration) return;
 
       if (savedTime < 30 || duration - savedTime < 30) {
@@ -297,210 +578,331 @@ const timeTracking = {
         return;
       }
 
-      state.player!.seekTo(savedTime, true);
-      console.log("Video seeked to:", savedTime);
-    } catch {}
-  },
-  setup: (player: YouTubePlayer) => {
-    if (state.isDestroyed || state.state === VideoState.LIVE) return null;
-    try {
-      const handlers = {
-        onPause: () => void timeTracking.save(),
-        onStateChange: (s: number) =>
-          (s === 2 || s === 0) && void timeTracking.save(),
-      };
+      this.state.player!.seekTo(savedTime, true);
+      console.log("[WatchFeature] Video seeked to:", savedTime);
+    } catch (error) {
+      console.warn("[WatchFeature] Restore time error:", error);
+    }
+  }
 
-      player.addEventListener("onPause", handlers.onPause);
-      player.addEventListener("onStateChange", handlers.onStateChange);
+  private setupTimeTracking(player: YouTubePlayer): (() => void) | null {
+    if (this.state.isDestroyed || this.state.state === VideoState.LIVE)
+      return null;
+    try {
+      const onPause = () => void this.saveTime();
+      const onStateChange = (s: number) =>
+        (s === 2 || s === 0) && void this.saveTime();
+
+      player.addEventListener("onPause", onPause);
+      player.addEventListener("onStateChange", onStateChange);
 
       return () => {
-        player.removeEventListener("onPause", handlers.onPause);
-        player.removeEventListener("onStateChange", handlers.onStateChange);
+        player.removeEventListener("onPause", onPause);
+        player.removeEventListener("onStateChange", onStateChange);
       };
-    } catch {
+    } catch (error) {
+      console.warn("[WatchFeature] Setup time tracking error:", error);
       return null;
     }
-  },
-};
+  }
 
-const animation = {
-  animate: (
+  // ─── Video Data ───────────────────────────────────────────────────────────
+
+  private parseVideoPage(html: string): {
+    ytInitialData: string | null;
+    ytInitialPlayerResponse: string | null;
+  } {
+    const initialDataMatch = html.match(/var ytInitialData\s*=\s*(\{.*?\});/);
+    const initialPlayerResponseMatch = html.match(
+      /var ytInitialPlayerResponse\s*=\s*(\{.*?\});/,
+    );
+
+    return {
+      ytInitialData: initialDataMatch?.[1] ?? null,
+      ytInitialPlayerResponse: initialPlayerResponseMatch?.[1] ?? null,
+    };
+  }
+
+  async fetchVideoData(url: string): Promise<{
+    ytInitialData: string | null;
+    ytInitialPlayerResponse: string | null;
+  }> {
+    const html = await fetchData(url);
+    return this.parseVideoPage(html);
+  }
+
+  private setVideoState(
+    microformat: PlayerMicroformatRenderer,
+    videoDetails: InitialPlayerResponseVideoDetails,
+  ): void {
+    const liveDetails = microformat?.liveBroadcastDetails;
+
+    if (liveDetails?.isLiveNow === true) {
+      this.state.state = VideoState.LIVE;
+    } else if (liveDetails?.isLiveNow === false && !videoDetails.isUpcoming) {
+      this.state.state = VideoState.PAST_LIVE;
+    } else if (liveDetails?.isLiveNow === false && videoDetails.isUpcoming) {
+      this.state.state = VideoState.UPCOMING;
+    } else {
+      this.state.state = VideoState.VOD;
+    }
+  }
+
+  private findVideoPrimaryInfo(
+    contents: ResultsContent[],
+  ): ResultsContent | undefined {
+    return contents.find(
+      (
+        item,
+      ): item is ResultsContent & {
+        videoPrimaryInfoRenderer: NonNullable<
+          ResultsContent["videoPrimaryInfoRenderer"]
+        >;
+      } => item.videoPrimaryInfoRenderer !== undefined,
+    );
+  }
+
+  private getViewCount(data: InitialData): string | null {
+    const contents =
+      data.contents.twoColumnWatchNextResults?.results.results.contents;
+    const videoPrimaryInfo = this.findVideoPrimaryInfo(contents!);
+
+    if (!videoPrimaryInfo?.videoPrimaryInfoRenderer) return null;
+
+    const content =
+      videoPrimaryInfo.videoPrimaryInfoRenderer.viewCount.videoViewCountRenderer
+        .viewCount;
+
+    return this.state.state === VideoState.UPCOMING ||
+      this.state.state === VideoState.LIVE
+      ? (content?.runs?.map((r) => r.text).join("") ?? null)
+      : (content?.simpleText ?? null);
+  }
+
+  private getVideoBadges(data: InitialData): string[] {
+    if (this.state.state !== VideoState.VOD) return [];
+
+    const contents =
+      data.contents.twoColumnWatchNextResults?.results.results.contents;
+    const videoPrimaryInfo = this.findVideoPrimaryInfo(contents!);
+
+    if (!videoPrimaryInfo?.videoPrimaryInfoRenderer) return [];
+
+    const badges = videoPrimaryInfo.videoPrimaryInfoRenderer.badges;
+    if (!badges?.length) return [];
+
+    return badges
+      .map((badge) => badge.metadataBadgeRenderer.label)
+      .filter((label): label is string => typeof label === "string");
+  }
+
+  private getDateText(
+    ytInitialData: InitialData,
+    ytInitialPlayerResponse: InitialPlayerResponse,
+  ): string | null {
+    if (this.state.state === VideoState.UPCOMING) {
+      return (
+        ytInitialPlayerResponse.playabilityStatus.liveStreamability?.liveStreamabilityRenderer.offlineSlate?.liveStreamOfflineSlateRenderer.mainText.runs
+          ?.map((r) => r.text)
+          .join("") ?? null
+      );
+    }
+
+    const contents =
+      ytInitialData.contents.twoColumnWatchNextResults?.results.results
+        .contents;
+    const videoPrimaryInfo = this.findVideoPrimaryInfo(contents!);
+
+    if (!videoPrimaryInfo?.videoPrimaryInfoRenderer) return null;
+
+    const content = videoPrimaryInfo.videoPrimaryInfoRenderer;
+    return this.state.state === VideoState.LIVE
+      ? (content?.dateText?.simpleText ?? null)
+      : (content?.relativeDateText?.simpleText ?? null);
+  }
+
+  private getDVREnabled(response: InitialPlayerResponse): boolean {
+    return response.videoDetails.isLiveDvrEnabled === true;
+  }
+
+  private async fetchAndLogVideoData(isUpdate = false): Promise<void> {
+    if (this.state.isDestroyed) return;
+    try {
+      const data = await this.fetchVideoData(location.href);
+      if (this.state.isDestroyed) return;
+
+      if (!data.ytInitialData || !data.ytInitialPlayerResponse) return;
+
+      const ytInitialDataObj = JSON.parse(data.ytInitialData) as InitialData;
+      const ytInitialPlayerResponseObj = JSON.parse(
+        data.ytInitialPlayerResponse,
+      ) as InitialPlayerResponse;
+
+      this.state.playerResponse = ytInitialPlayerResponseObj;
+
+      this.setVideoState(
+        ytInitialPlayerResponseObj.microformat.playerMicroformatRenderer,
+        ytInitialPlayerResponseObj.videoDetails,
+      );
+
+      const viewCount = this.getViewCount(ytInitialDataObj);
+      const dateText = this.getDateText(
+        ytInitialDataObj,
+        ytInitialPlayerResponseObj,
+      );
+
+      this.state.videoBadges = this.getVideoBadges(ytInitialDataObj);
+      console.log("[WatchFeature] Video badge(s):", this.state.videoBadges);
+      console.log(
+        "[WatchFeature] Video title:",
+        ytInitialPlayerResponseObj.videoDetails.title,
+      );
+      console.log("[WatchFeature] View count:", viewCount);
+      console.log("[WatchFeature] Date text:", dateText);
+
+      if (this.state.isDestroyed) return;
+
+      if (viewCount && dateText) {
+        await this.displayVideoInfo(viewCount, dateText, isUpdate);
+      }
+
+      if (this.state.state === VideoState.LIVE) {
+        const isDVREnabled = this.getDVREnabled(ytInitialPlayerResponseObj);
+        console.log("[WatchFeature] Is live DVR enabled:", isDVREnabled);
+        await waitForElement("div.ytp-time-wrapper", 5000);
+        if (!this.state.isDestroyed) this.displayDVRIndicator(isDVREnabled);
+      }
+    } catch (error) {
+      console.warn("[WatchFeature] Fetch video data error:", error);
+    }
+  }
+
+  // ─── UI ───────────────────────────────────────────────────────────────────
+
+  private createSeparator(): HTMLElement {
+    const separator = document.createElement("span");
+    separator.textContent = "•";
+    return separator;
+  }
+
+  private animateViewCount(
     element: HTMLElement,
     fromValue: number,
     newViewCountString: string,
-  ) => {
-    if (state.isDestroyed) return;
+    exactCount?: number,
+  ): void {
+    if (this.state.isDestroyed) return;
     try {
-      const toValue = viewCountParser.parse(newViewCountString).count;
+      const toValue = exactCount ?? this.parser.parse(newViewCountString).count;
+
       if (toValue === fromValue || fromValue === 0) {
-        animation.setStatic(element, toValue, newViewCountString);
+        this.setStaticViewCount(element, toValue, newViewCountString);
         return;
       }
 
-      const { suffix, divisor, decimalPlaces } =
-        viewCountParser.extractSuffix(newViewCountString);
-      // const diff = Math.abs(toValue - fromValue);
-      // const durationMs =
-      //   (diff < 10 ? 0.8 : Math.min(2.5, 1.0 + Math.log10(diff + 1) * 0.6)) *
-      //   1000;
-
+      const { suffix, divisor } = this.parser.extractSuffix(newViewCountString);
       const suffixElement = document.getElementById("yt-enhancer-view-suffix");
       if (suffixElement) suffixElement.textContent = suffix;
 
-      if (!cleanup.odometer) {
-        animation.setStatic(element, toValue, newViewCountString);
+      if (!this.odometer) {
+        this.setStaticViewCount(element, toValue, newViewCountString);
         return;
       }
 
-      cleanup.odometer.update(toValue / divisor);
+      this.odometer.update(toValue / divisor);
 
       element.addEventListener(
         "odometerdone",
         () => {
-          if (!state.isDestroyed) state.currentViewCount = toValue;
+          if (!this.state.isDestroyed) this.state.currentViewCount = toValue;
         },
         { once: true },
       );
-    } catch {
-      animation.setStatic(
+    } catch (error) {
+      console.warn("[WatchFeature] Animate view count error:", error);
+      this.setStaticViewCount(
         element,
-        viewCountParser.parse(newViewCountString).count,
+        exactCount ?? this.parser.parse(newViewCountString).count,
         newViewCountString,
       );
     }
-  },
-  setStatic: (
+  }
+
+  private setStaticViewCount(
     element: HTMLElement,
     toValue: number,
     newViewCountString: string,
-  ) => {
-    if (state.isDestroyed) return;
+  ): void {
+    if (this.state.isDestroyed) return;
     const { suffix, divisor, decimalPlaces } =
-      viewCountParser.extractSuffix(newViewCountString);
+      this.parser.extractSuffix(newViewCountString);
     const formatted = (toValue / divisor)
       .toFixed(decimalPlaces)
-      .replace(/\.0+$/, "");
+      .replace(/\.0+$/, "")
+      .replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
-    element.textContent = formatted.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    element.textContent = formatted;
 
     const suffixElement = document.getElementById("yt-enhancer-view-suffix");
     if (suffixElement) suffixElement.textContent = suffix;
 
-    state.currentViewCount = toValue;
-  },
-};
+    this.state.currentViewCount = toValue;
+  }
 
-const networkIntercept = (() => {
-  let isSetup = false;
-
-  return {
-    setup: () => {
-      if (isSetup) return;
-      isSetup = true;
-
-      window.addEventListener("yt-enhancer-metadata-update", (event) => {
-        if (state.isDestroyed) return;
-        const { actions } = (
-          event as CustomEvent<{
-            actions: Array<UpdateViewershipAction | UpdateDateTextAction>;
-          }>
-        ).detail;
-        networkIntercept.handleUpdate(actions);
-      });
-    },
-    handleUpdate: (
-      actions: Array<UpdateViewershipAction | UpdateDateTextAction>,
-    ) => {
-      if (state.isDestroyed) return;
-      try {
-        const viewershipAction = actions.find(
-          (action): action is UpdateViewershipAction =>
-            "updateViewershipAction" in action,
-        );
-        const dateTextAction = actions.find(
-          (action): action is UpdateDateTextAction =>
-            "updateDateTextAction" in action,
-        );
-
-        const newViewCount =
-          viewershipAction?.updateViewershipAction?.viewCount
-            ?.videoViewCountRenderer?.viewCount;
-        const newDateText = dateTextAction?.updateDateTextAction?.dateText;
-
-        const viewCountString =
-          newViewCount?.simpleText ??
-          newViewCount?.runs?.map((r) => r.text).join("");
-
-        const dateTextString =
-          newDateText?.simpleText ??
-          newDateText?.runs?.map((r) => r.text).join("");
-
-        if (viewCountString || dateTextString) {
-          void ui.displayVideoInfo(
-            viewCountString ?? "",
-            dateTextString ?? state.currentDateText,
-            true,
-          );
-        }
-      } catch {}
-    },
-  };
-})();
-
-const ui = {
-  createSeparator: () => {
-    const separator = document.createElement("span");
-    separator.textContent = "•";
-
-    return separator;
-  },
-
-  displayVideoInfo: async (
+  private async displayVideoInfo(
     viewCount: string,
     dateText: string,
     isUpdate = false,
-  ) => {
-    if (state.isDestroyed) return;
+    exactCount?: number,
+  ): Promise<void> {
+    if (this.state.isDestroyed) return;
     try {
       if (!viewCount) return;
 
-      const newViewCount = viewCountParser.parse(viewCount).count;
+      const newViewCount = exactCount ?? this.parser.parse(viewCount).count;
       const existingInfo = document.getElementById("yt-enhancer-video-info");
       const viewCountElement = document.getElementById(
         "yt-enhancer-view-count",
       );
 
       if (isUpdate && existingInfo && viewCountElement) {
-        if (newViewCount !== state.currentViewCount) {
-          console.log("View count update:", viewCount);
-          animation.animate(
-            viewCountElement,
-            state.currentViewCount,
+        if (newViewCount !== this.state.currentViewCount) {
+          const diff = newViewCount - this.state.currentViewCount;
+          const diffText = diff > 0 ? `+${diff}` : `${diff}`;
+          console.log(
+            "[WatchFeature] View count update:",
             viewCount,
+            `(${diffText})`,
+          );
+          this.animateViewCount(
+            viewCountElement,
+            this.state.currentViewCount,
+            viewCount,
+            exactCount,
           );
         }
 
         const dateTextElement = document.getElementById(
           "yt-enhancer-date-text",
         );
-        if (dateTextElement && dateText !== state.currentDateText) {
-          console.log("Date text update:", dateText);
+        if (dateTextElement && dateText !== this.state.currentDateText) {
+          console.log("[WatchFeature] Date text update:", dateText);
           dateTextElement.textContent = dateText;
-          state.currentDateText = dateText;
+          this.state.currentDateText = dateText;
         }
         return;
       }
 
       existingInfo?.remove();
 
-      state.currentViewCount = newViewCount;
-      state.currentDateText = dateText;
+      this.state.currentViewCount = newViewCount;
+      this.state.currentDateText = dateText;
 
       const titleElement = await waitForElement("#above-the-fold > div#title");
-      if (state.isDestroyed || !titleElement) return;
+      if (this.state.isDestroyed || !titleElement) return;
 
       const { suffix, divisor, decimalPlaces } =
-        viewCountParser.extractSuffix(viewCount);
+        this.parser.extractSuffix(viewCount);
 
       const infoWrapper = document.createElement("div");
       infoWrapper.id = "yt-enhancer-video-info";
@@ -528,7 +930,7 @@ const ui = {
 
       viewCountContainer.append(viewCountSpan, suffixSpan);
 
-      cleanup.odometer = new Odometer({
+      this.odometer = new Odometer({
         el: viewCountSpan,
         value: newViewCount / divisor,
         duration: 2000,
@@ -543,23 +945,26 @@ const ui = {
 
       infoContainer.append(
         viewCountContainer,
-        ui.createSeparator(),
+        this.createSeparator(),
         dateTextSpan,
       );
 
-      if (state.videoBadges.length > 0) {
-        for (const label of state.videoBadges) {
+      if (this.state.videoBadges.length > 0) {
+        for (const label of this.state.videoBadges) {
           const labelSpan = document.createElement("span");
           labelSpan.textContent = label;
-          infoContainer.append(ui.createSeparator(), labelSpan);
+          infoContainer.append(this.createSeparator(), labelSpan);
         }
       }
 
-      infoWrapper.append(infoContainer, ui.createRefreshButton());
+      infoWrapper.append(infoContainer, this.createRefreshButton());
       titleElement.insertAdjacentElement("afterend", infoWrapper);
-    } catch {}
-  },
-  createRefreshButton: () => {
+    } catch (error) {
+      console.warn("[WatchFeature] Display video info error:", error);
+    }
+  }
+
+  private createRefreshButton(): HTMLButtonElement {
     const button = document.createElement("button");
     button.id = "yt-enhancer-refresh-btn";
     button.appendChild(
@@ -572,24 +977,27 @@ const ui = {
     );
 
     button.onclick = () => {
-      if (state.isDestroyed) return;
+      if (this.state.isDestroyed) return;
       void (async () => {
         try {
+          const svg = button.querySelector<SVGElement>("svg");
           button.style.pointerEvents = "none";
           button.style.opacity = "0.5";
-          const svg = button.querySelector<SVGElement>("svg");
           if (svg) {
             svg.style.transition = "transform 0.5s ease";
             svg.style.transform = "rotate(360deg)";
           }
-          await videoData.fetchAndLog(true);
+
+          await this.fetchAndLogVideoData(true);
+
           setTimeout(() => {
-            if (state.isDestroyed) return;
+            if (this.state.isDestroyed) return;
             button.style.pointerEvents = "auto";
             button.style.opacity = "1";
             if (svg) svg.style.transform = "rotate(0deg)";
           }, 500);
-        } catch {
+        } catch (error) {
+          console.warn("[WatchFeature] Refresh button error:", error);
           button.style.pointerEvents = "auto";
           button.style.opacity = "1";
         }
@@ -597,14 +1005,14 @@ const ui = {
     };
 
     return button;
-  },
-  displayDVRIndicator: (isDVREnabled: boolean) => {
-    if (state.isDestroyed) return;
-    try {
-      const existing = document.getElementById("yt-enhancer-dvr-indicator");
-      existing?.remove();
+  }
 
-      if (state.state !== VideoState.LIVE || isDVREnabled) return;
+  private displayDVRIndicator(isDVREnabled: boolean): void {
+    if (this.state.isDestroyed) return;
+    try {
+      document.getElementById("yt-enhancer-dvr-indicator")?.remove();
+
+      if (this.state.state !== VideoState.LIVE || isDVREnabled) return;
 
       const timeWrapper = document.querySelector<HTMLElement>(
         "div.ytp-time-wrapper",
@@ -623,357 +1031,16 @@ const ui = {
 
       indicator.append(separator, text);
       timeWrapper.appendChild(indicator);
-    } catch {}
-  },
-};
-
-const videoData = {
-  parse: (html: string) => {
-    const initialDataMatch = html.match(/var ytInitialData\s*=\s*(\{.*?\});/);
-    const initialPlayerResponseMatch = html.match(
-      /var ytInitialPlayerResponse\s*=\s*(\{.*?\});/,
-    );
-
-    return {
-      ytInitialData: initialDataMatch?.[1] ?? null,
-      ytInitialPlayerResponse: initialPlayerResponseMatch?.[1] ?? null,
-    };
-  },
-
-  fetch: async (url: string) => {
-    const html = await fetchData(url);
-    return videoData.parse(html);
-  },
-
-  setState: (
-    microformat: PlayerMicroformatRenderer,
-    videoDetails: InitialPlayerResponseVideoDetails,
-  ) => {
-    const liveDetails = microformat?.liveBroadcastDetails;
-
-    if (liveDetails?.isLiveNow === true) {
-      state.state = VideoState.LIVE;
-    } else if (liveDetails?.isLiveNow === false && !videoDetails.isUpcoming) {
-      state.state = VideoState.PAST_LIVE;
-    } else if (liveDetails?.isLiveNow === false && videoDetails.isUpcoming) {
-      state.state = VideoState.UPCOMING;
-    } else {
-      state.state = VideoState.VOD;
+    } catch (error) {
+      console.warn("[WatchFeature] Display DVR indicator error:", error);
     }
-  },
+  }
+}
 
-  findVideoPrimaryInfo: (
-    contents: ResultsContent[],
-  ): ResultsContent | undefined => {
-    return contents.find(
-      (
-        item,
-      ): item is ResultsContent & {
-        videoPrimaryInfoRenderer: NonNullable<
-          ResultsContent["videoPrimaryInfoRenderer"]
-        >;
-      } => item.videoPrimaryInfoRenderer !== undefined,
-    );
-  },
-
-  getViewCount: (data: InitialData) => {
-    const contents =
-      data.contents.twoColumnWatchNextResults?.results.results.contents;
-    const videoPrimaryInfo = videoData.findVideoPrimaryInfo(contents!);
-
-    if (!videoPrimaryInfo?.videoPrimaryInfoRenderer) return null;
-
-    const content =
-      videoPrimaryInfo.videoPrimaryInfoRenderer?.viewCount
-        .videoViewCountRenderer.viewCount;
-
-    return state.state === VideoState.UPCOMING ||
-      state.state === VideoState.LIVE
-      ? (content?.runs?.map((r) => r.text).join("") ?? null)
-      : (content?.simpleText ?? null);
-  },
-
-  getVideoBadges: (data: InitialData): string[] => {
-    if (state.state !== VideoState.VOD) return [];
-
-    const contents =
-      data.contents.twoColumnWatchNextResults?.results.results.contents;
-    const videoPrimaryInfo = videoData.findVideoPrimaryInfo(contents!);
-
-    if (!videoPrimaryInfo?.videoPrimaryInfoRenderer) return [];
-
-    const badges = videoPrimaryInfo.videoPrimaryInfoRenderer.badges;
-
-    if (!badges?.length) return [];
-
-    return badges
-      .map((badge) => badge.metadataBadgeRenderer.label)
-      .filter((label): label is string => typeof label === "string");
-  },
-
-  getDateText: (
-    ytInitialData: InitialData,
-    ytInitialPlayerResponse: InitialPlayerResponse,
-  ) => {
-    if (state.state === VideoState.UPCOMING) {
-      return (
-        ytInitialPlayerResponse.playabilityStatus.liveStreamability?.liveStreamabilityRenderer.offlineSlate?.liveStreamOfflineSlateRenderer.mainText.runs
-          ?.map((r) => r.text)
-          .join("") ?? null
-      );
-    }
-
-    const contents =
-      ytInitialData.contents.twoColumnWatchNextResults?.results.results
-        .contents;
-    const videoPrimaryInfo = videoData.findVideoPrimaryInfo(contents!);
-
-    if (!videoPrimaryInfo?.videoPrimaryInfoRenderer) return null;
-
-    const content = videoPrimaryInfo.videoPrimaryInfoRenderer;
-    return state.state === VideoState.LIVE
-      ? (content?.dateText?.simpleText ?? null)
-      : (content?.relativeDateText?.simpleText ?? null);
-  },
-
-  getDVREnabled: (response: InitialPlayerResponse) =>
-    response.videoDetails.isLiveDvrEnabled === true,
-
-  fetchAndLog: async (isUpdate = false) => {
-    if (state.isDestroyed) return;
-    try {
-      const data = await videoData.fetch(location.href);
-      if (state.isDestroyed) return;
-
-      if (data.ytInitialData && data.ytInitialPlayerResponse) {
-        const ytInitialDataObj = JSON.parse(data.ytInitialData) as InitialData;
-        const ytInitialPlayerResponseObj: InitialPlayerResponse = JSON.parse(
-          data.ytInitialPlayerResponse,
-        );
-
-        state.playerResponse = ytInitialPlayerResponseObj;
-
-        videoData.setState(
-          ytInitialPlayerResponseObj.microformat.playerMicroformatRenderer,
-          ytInitialPlayerResponseObj.videoDetails,
-        );
-
-        const viewCount = videoData.getViewCount(ytInitialDataObj);
-        const dateText = videoData.getDateText(
-          ytInitialDataObj,
-          ytInitialPlayerResponseObj,
-        );
-
-        state.videoBadges = videoData.getVideoBadges(ytInitialDataObj);
-        console.log("Video badge(s):", state.videoBadges);
-
-        console.log(
-          "Video Title:",
-          ytInitialPlayerResponseObj.videoDetails.title,
-        );
-        console.log("View Count:", viewCount);
-        console.log("Date Text:", dateText);
-
-        if (state.isDestroyed) return;
-
-        if (viewCount && dateText)
-          await ui.displayVideoInfo(viewCount, dateText, isUpdate);
-
-        if (state.state === VideoState.LIVE) {
-          const isDVREnabled = videoData.getDVREnabled(
-            ytInitialPlayerResponseObj,
-          );
-          console.log("Is Live DVR Enabled:", isDVREnabled);
-          await waitForElement("div.ytp-time-wrapper", 5000);
-          if (!state.isDestroyed) ui.displayDVRIndicator(isDVREnabled);
-        }
-      }
-    } catch {}
-  },
-};
-
-const playerFeatures = {
-  applyAll: async (player: YouTubePlayer) => {
-    if (state.isDestroyed) return;
-    const maxRetries = 5;
-    const delayMs = 500;
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
-      if (state.isDestroyed) return;
-      try {
-        playerFeatures.loop(player);
-        playerFeatures.caption(player);
-        await playerFeatures.setQuality(player, config.quality);
-        return;
-      } catch {
-        if (attempt < maxRetries - 1) {
-          await new Promise((resolve) => setTimeout(resolve, delayMs));
-        }
-      }
-    }
-  },
-  loop: (player: YouTubePlayer) => {
-    if (state.isDestroyed) return;
-    try {
-      if (config.autoLoop) player.setLoopVideo(true);
-    } catch {}
-  },
-  setQuality: async (player: YouTubePlayer, quality: string) => {
-    if (state.isDestroyed || !config.qualityService) return;
-    const available = getAvailableQualities(state.playerResponse!);
-    const finalQuality = selectBestQuality(quality, available);
-    await player.setPlaybackQualityRange(finalQuality);
-  },
-  caption: (player: YouTubePlayer) => {
-    if (state.isDestroyed) return;
-    try {
-      if (config.autoCaption) {
-        player.toggleSubtitlesOn();
-        state.isCaptionActive = true;
-      }
-    } catch {}
-  },
-};
-
-const configManager = {
-  load: async () => {
-    try {
-      const saved = await storageBridge.get("dropdown_config");
-      if (saved) {
-        config.autoLoop = saved.autoLoop ?? true;
-        config.qualityService = saved.qualityService ?? true;
-        config.autoCaption = saved.autoCaption ?? true;
-        config.quality = saved.preferredQuality ?? "hd1080";
-      }
-    } catch {}
-  },
-};
-
-const eventHandlers = {
-  refresh: async () => {
-    if (state.isDestroyed) return;
-    try {
-      const currentId = getVideoId();
-      if (currentId !== state.id) {
-        runCleanup();
-        return;
-      }
-
-      if (!state.player) state.player = await waitForPlayer();
-
-      if (state.player && !state.isDestroyed) {
-        await playerFeatures.applyAll(state.player);
-        if (state.state !== VideoState.LIVE) {
-          cleanup.timeTracking?.();
-          cleanup.timeTracking = timeTracking.setup(state.player);
-        }
-      }
-    } catch {}
-  },
-  setting: (event: Event) => {
-    if (state.isDestroyed) return;
-    try {
-      const { setting, value } = (event as CustomEvent).detail;
-      if (!state.player) return;
-
-      if (setting === "autoLoop") {
-        config.autoLoop = value;
-        state.player.setLoopVideo(value);
-      } else if (setting === "qualityService") {
-        config.qualityService = value;
-        if (value && config.quality)
-          void playerFeatures.setQuality(state.player, config.quality);
-      } else if (setting === "autoCaption") {
-        config.autoCaption = value;
-        if (value && !state.isCaptionActive) {
-          state.player.toggleSubtitlesOn();
-          state.isCaptionActive = true;
-        } else if (!value && state.isCaptionActive) {
-          state.player.toggleSubtitles();
-          state.isCaptionActive = false;
-        }
-      }
-    } catch {}
-  },
-  quality: (event: Event) => {
-    if (state.isDestroyed) return;
-    try {
-      const { quality: newQuality } = (event as CustomEvent).detail;
-      config.quality = newQuality;
-      if (state.player && config.qualityService)
-        void playerFeatures.setQuality(state.player, newQuality);
-    } catch {}
-  },
-};
-
-const handleVideo = async () => {
-  if (state.isDestroyed) return;
-  try {
-    if (!state.player) state.player = await waitForPlayer();
-    if (state.player && !state.isDestroyed)
-      await playerFeatures.applyAll(state.player);
-  } catch {}
-};
+const watchFeatureInstance = new WatchFeature();
 
 export const watchFeature = {
   match: (path: string) => path === "/watch",
-  init: async () => {
-    const currentId = getVideoId();
-    const previousId = state.id;
-
-    if (previousId && previousId !== currentId) {
-      console.log(`[YT Enhancer] Video changed: ${previousId} → ${currentId}`);
-      runCleanup();
-    }
-
-    if (state.isDestroyed) resetState();
-
-    state.id = currentId;
-    await configManager.load();
-    networkIntercept.setup();
-
-    await Promise.all([videoData.fetchAndLog(), handleVideo()]);
-
-    if (state.player && state.state !== VideoState.LIVE && !state.isDestroyed) {
-      cleanup.timeTracking?.();
-      cleanup.timeTracking = timeTracking.setup(state.player);
-      await timeTracking.restore();
-    }
-
-    const handleBeforeUnload = () => void timeTracking.save();
-    const handleVisibilityChange = () =>
-      document.hidden && void timeTracking.save();
-
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    window.addEventListener("yt-enhancer-setting", eventHandlers.setting);
-    window.addEventListener("yt-enhancer-quality", eventHandlers.quality);
-    window.addEventListener("yt-enhancer-refresh", eventHandlers.refresh);
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
-    cleanup.handlers.push(
-      () => window.removeEventListener("beforeunload", handleBeforeUnload),
-      () =>
-        window.removeEventListener(
-          "yt-enhancer-setting",
-          eventHandlers.setting,
-        ),
-      () =>
-        window.removeEventListener(
-          "yt-enhancer-quality",
-          eventHandlers.quality,
-        ),
-      () =>
-        window.removeEventListener(
-          "yt-enhancer-refresh",
-          eventHandlers.refresh,
-        ),
-      () =>
-        document.removeEventListener(
-          "visibilitychange",
-          handleVisibilityChange,
-        ),
-    );
-
-    return () => runCleanup();
-  },
-  fetchVideoData: videoData.fetch,
+  init: () => watchFeatureInstance.init(),
+  fetchVideoData: (url: string) => watchFeatureInstance.fetchVideoData(url),
 };
