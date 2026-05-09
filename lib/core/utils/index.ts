@@ -42,7 +42,9 @@ export const waitForElement = async <T extends Element>(
     };
 
     const onVisibilityChange = () => {
-      lastTick = Date.now();
+      if (!document.hidden) {
+        lastTick = Date.now();
+      }
     };
 
     const observer = new MutationObserver(tryResolve);
@@ -59,7 +61,10 @@ export const waitForElement = async <T extends Element>(
       if (activeElapsed >= timeout) {
         cleanup();
         resolve(null);
+        return;
       }
+
+      tryResolve();
     }, 100);
   });
 };
@@ -77,7 +82,7 @@ const REQUIRED_METHODS = [
   "seekTo",
 ] as const;
 
-const READY_STATES = new Set([1, 2]);
+const READY_STATES = new Set([1, 2, 3]);
 
 const isPlayerReady = (player: YouTubePlayer): boolean => {
   try {
@@ -132,7 +137,9 @@ export const waitForPlayer = async (): Promise<YouTubePlayer> => {
     };
 
     const onVisibilityChange = () => {
-      lastTick = Date.now();
+      if (!document.hidden) {
+        lastTick = Date.now();
+      }
     };
 
     const onStateChange = () => {
