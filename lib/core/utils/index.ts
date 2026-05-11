@@ -2,6 +2,19 @@
 
 import type { YouTubePlayer } from "@/lib/sites/youtube/types";
 
+export const ELEMENT_IDS = {
+  videoInfo: "yt-enhancer-video-info",
+  viewCount: "yt-enhancer-view-count",
+  viewSuffix: "yt-enhancer-view-suffix",
+  dateText: "yt-enhancer-date-text",
+  dvrIndicator: "yt-enhancer-dvr-indicator",
+  refreshBtn: "yt-enhancer-refresh-btn",
+  dropdown: "yt-enhancer-dropdown",
+  dropdownButton: "yt-enhancer-dropdown-button",
+  menu: "yt-enhancer-menu",
+  menuHeader: "yt-enhancer-menu-header",
+} as const;
+
 export const fetchData = async (url: string): Promise<string> => {
   const res = await fetch(url);
   if (!res.ok) {
@@ -67,6 +80,37 @@ export const waitForElement = async <T extends Element>(
       tryResolve();
     }, 100);
   });
+};
+
+type ElementProps<K extends keyof HTMLElementTagNameMap> = Partial<
+  Omit<HTMLElementTagNameMap[K], "style">
+> & {
+  style?: Partial<CSSStyleDeclaration>;
+  attrs?: Record<string, string>;
+};
+
+export const createElement = <K extends keyof HTMLElementTagNameMap>(
+  tag: K,
+  props?: ElementProps<K>,
+): HTMLElementTagNameMap[K] => {
+  const el = document.createElement(tag);
+  if (!props) return el;
+
+  const { style, attrs, ...rest } = props;
+
+  Object.assign(el, rest);
+
+  if (style) {
+    Object.assign(el.style, style);
+  }
+
+  if (attrs) {
+    for (const [key, value] of Object.entries(attrs)) {
+      el.setAttribute(key, value);
+    }
+  }
+
+  return el;
 };
 
 const REQUIRED_METHODS = [
