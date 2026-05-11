@@ -15,6 +15,8 @@ import type {
 } from "../../types/VideoData";
 import {
   buildSVG,
+  createElement,
+  ELEMENT_IDS,
   fetchData,
   getVideoId,
   waitForElement,
@@ -50,6 +52,15 @@ interface Config {
   qualityService: boolean;
   quality: string;
 }
+
+type BooleanKeys<T> = {
+  [K in keyof T]: T[K] extends boolean ? K : never;
+}[keyof T];
+
+type SettingEvent = {
+  setting: BooleanKeys<Config>;
+  value: boolean;
+};
 
 const QUALITY_RANK: Record<string, number> = {
   highres: 8,
@@ -274,8 +285,8 @@ class WatchFeature {
     }
     this.cleanupHandlers = [];
 
-    document.getElementById("yt-enhancer-video-info")?.remove();
-    document.getElementById("yt-enhancer-dvr-indicator")?.remove();
+    document.getElementById(ELEMENT_IDS.videoInfo)?.remove();
+    document.getElementById(ELEMENT_IDS.dvrIndicator)?.remove();
 
     this.state = this.createInitialState();
     this.metadataListenerAttached = false;
@@ -368,30 +379,39 @@ class WatchFeature {
     }
   }
 
+  private readonly settingHandlers: Record<
+    BooleanKeys<Config>,
+    (value: boolean) => void
+  > = {
+    autoLoop: (value) => {
+      this.config.autoLoop = value;
+      this.state.player?.setLoopVideo(value);
+    },
+    qualityService: (value) => {
+      this.config.qualityService = value;
+      if (value && this.config.quality && this.state.player) {
+        void this.setQuality(this.state.player, this.config.quality);
+      }
+    },
+    autoCaption: (value) => {
+      this.config.autoCaption = value;
+      if (!this.state.player) return;
+      if (value && !this.state.isCaptionActive) {
+        this.state.player.toggleSubtitlesOn();
+        this.state.isCaptionActive = true;
+      } else if (!value && this.state.isCaptionActive) {
+        this.state.player.toggleSubtitles();
+        this.state.isCaptionActive = false;
+      }
+    },
+  };
+
   private onSetting(event: Event): void {
     if (this.state.isDestroyed) return;
     try {
-      const { setting, value } = (event as CustomEvent).detail;
-      if (!this.state.player) return;
-
-      if (setting === "autoLoop") {
-        this.config.autoLoop = value;
-        this.state.player.setLoopVideo(value);
-      } else if (setting === "qualityService") {
-        this.config.qualityService = value;
-        if (value && this.config.quality) {
-          void this.setQuality(this.state.player, this.config.quality);
-        }
-      } else if (setting === "autoCaption") {
-        this.config.autoCaption = value;
-        if (value && !this.state.isCaptionActive) {
-          this.state.player.toggleSubtitlesOn();
-          this.state.isCaptionActive = true;
-        } else if (!value && this.state.isCaptionActive) {
-          this.state.player.toggleSubtitles();
-          this.state.isCaptionActive = false;
-        }
-      }
+      const { setting, value } = (event as CustomEvent<SettingEvent>).detail;
+      this.config[setting] = value;
+      this.settingHandlers[setting]?.(value);
     } catch (error) {
       console.warn("[WatchFeature] Setting handler error:", error);
     }
@@ -780,8 +800,7 @@ class WatchFeature {
   // ─── UI ───────────────────────────────────────────────────────────────────
 
   private createSeparator(): HTMLElement {
-    const separator = document.createElement("span");
-    separator.textContent = "•";
+    const separator = createElement("span", { textContent: "•" });
     return separator;
   }
 
@@ -801,7 +820,7 @@ class WatchFeature {
       }
 
       const { suffix, divisor } = this.parser.extractSuffix(newViewCountString);
-      const suffixElement = document.getElementById("yt-enhancer-view-suffix");
+      const suffixElement = document.getElementById(ELEMENT_IDS.viewSuffix);
       if (suffixElement) suffixElement.textContent = suffix;
 
       if (!this.odometer) {
@@ -843,7 +862,7 @@ class WatchFeature {
 
     element.textContent = formatted;
 
-    const suffixElement = document.getElementById("yt-enhancer-view-suffix");
+    const suffixElement = document.getElementById(ELEMENT_IDS.viewSuffix);
     if (suffixElement) suffixElement.textContent = suffix;
 
     this.state.currentViewCount = toValue;
@@ -860,10 +879,8 @@ class WatchFeature {
       if (!viewCount) return;
 
       const newViewCount = exactCount ?? this.parser.parse(viewCount).count;
-      const existingInfo = document.getElementById("yt-enhancer-video-info");
-      const viewCountElement = document.getElementById(
-        "yt-enhancer-view-count",
-      );
+      const existingInfo = document.getElementById(ELEMENT_IDS.videoInfo);
+      const viewCountElement = document.getElementById(ELEMENT_IDS.viewCount);
 
       if (isUpdate && existingInfo && viewCountElement) {
         if (newViewCount !== this.state.currentViewCount) {
@@ -882,9 +899,7 @@ class WatchFeature {
           );
         }
 
-        const dateTextElement = document.getElementById(
-          "yt-enhancer-date-text",
-        );
+        const dateTextElement = document.getElementById(ELEMENT_IDS.dateText);
         if (dateTextElement && dateText !== this.state.currentDateText) {
           console.log("[WatchFeature] Date text update:", dateText);
           dateTextElement.textContent = dateText;
@@ -904,18 +919,18 @@ class WatchFeature {
       const { suffix, divisor, decimalPlaces } =
         this.parser.extractSuffix(viewCount);
 
-      const infoWrapper = document.createElement("div");
-      infoWrapper.id = "yt-enhancer-video-info";
+      const infoWrapper = createElement("div", { id: ELEMENT_IDS.videoInfo });
 
-      const infoContainer = document.createElement("div");
-      infoContainer.id = "info-container";
+      const infoContainer = createElement("div", { id: "info-container" });
 
-      const viewCountContainer = document.createElement("span");
-      viewCountContainer.id = "viewcount-container";
+      const viewCountContainer = createElement("span", {
+        id: "viewcount-container",
+      });
 
-      const viewCountSpan = document.createElement("span");
-      viewCountSpan.id = "yt-enhancer-view-count";
-      viewCountSpan.style.fontVariantNumeric = "tabular-nums";
+      const viewCountSpan = createElement("span", {
+        id: ELEMENT_IDS.viewCount,
+        style: { fontVariantNumeric: "tabular-nums" },
+      });
 
       const initialValue = newViewCount / divisor;
       const formattedInitial = initialValue
@@ -924,9 +939,10 @@ class WatchFeature {
         .replace(/\B(?=(\d{3})+(?!\d))/g, ",");
       viewCountSpan.textContent = formattedInitial;
 
-      const suffixSpan = document.createElement("span");
-      suffixSpan.id = "yt-enhancer-view-suffix";
-      suffixSpan.textContent = suffix;
+      const suffixSpan = createElement("span", {
+        id: ELEMENT_IDS.viewSuffix,
+        textContent: suffix,
+      });
 
       viewCountContainer.append(viewCountSpan, suffixSpan);
 
@@ -939,9 +955,10 @@ class WatchFeature {
         theme: "minimal",
       });
 
-      const dateTextSpan = document.createElement("span");
-      dateTextSpan.id = "yt-enhancer-date-text";
-      dateTextSpan.textContent = dateText;
+      const dateTextSpan = createElement("span", {
+        id: ELEMENT_IDS.dateText,
+        textContent: dateText,
+      });
 
       infoContainer.append(
         viewCountContainer,
@@ -951,7 +968,7 @@ class WatchFeature {
 
       if (this.state.videoBadges.length > 0) {
         for (const label of this.state.videoBadges) {
-          const labelSpan = document.createElement("span");
+          const labelSpan = createElement("span");
           labelSpan.textContent = label;
           infoContainer.append(this.createSeparator(), labelSpan);
         }
@@ -965,8 +982,7 @@ class WatchFeature {
   }
 
   private createRefreshButton(): HTMLButtonElement {
-    const button = document.createElement("button");
-    button.id = "yt-enhancer-refresh-btn";
+    const button = createElement("button", { id: ELEMENT_IDS.refreshBtn });
     button.appendChild(
       buildSVG("0 0 24 24", [
         {
@@ -976,32 +992,30 @@ class WatchFeature {
       ]),
     );
 
-    button.onclick = () => {
+    button.onclick = async () => {
       if (this.state.isDestroyed) return;
-      void (async () => {
-        try {
-          const svg = button.querySelector<SVGElement>("svg");
-          button.style.pointerEvents = "none";
-          button.style.opacity = "0.5";
-          if (svg) {
-            svg.style.transition = "transform 0.5s ease";
-            svg.style.transform = "rotate(360deg)";
-          }
+      try {
+        const svg = button.querySelector<SVGElement>("svg");
+        button.style.pointerEvents = "none";
+        button.style.opacity = "0.5";
+        if (svg) {
+          svg.style.transition = "transform 0.5s ease";
+          svg.style.transform = "rotate(360deg)";
+        }
 
-          await this.fetchAndLogVideoData(true);
+        await this.fetchAndLogVideoData(true);
 
-          setTimeout(() => {
-            if (this.state.isDestroyed) return;
-            button.style.pointerEvents = "auto";
-            button.style.opacity = "1";
-            if (svg) svg.style.transform = "rotate(0deg)";
-          }, 500);
-        } catch (error) {
-          console.warn("[WatchFeature] Refresh button error:", error);
+        setTimeout(() => {
+          if (this.state.isDestroyed) return;
           button.style.pointerEvents = "auto";
           button.style.opacity = "1";
-        }
-      })();
+          if (svg) svg.style.transform = "rotate(0deg)";
+        }, 500);
+      } catch (error) {
+        console.warn("[WatchFeature] Refresh button error:", error);
+        button.style.pointerEvents = "auto";
+        button.style.opacity = "1";
+      }
     };
 
     return button;
@@ -1010,7 +1024,7 @@ class WatchFeature {
   private displayDVRIndicator(isDVREnabled: boolean): void {
     if (this.state.isDestroyed) return;
     try {
-      document.getElementById("yt-enhancer-dvr-indicator")?.remove();
+      document.getElementById(ELEMENT_IDS.dvrIndicator)?.remove();
 
       if (this.state.state !== VideoState.LIVE || isDVREnabled) return;
 
@@ -1019,15 +1033,14 @@ class WatchFeature {
       );
       if (!timeWrapper) return;
 
-      const indicator = document.createElement("div");
-      indicator.id = "yt-enhancer-dvr-indicator";
+      const indicator = createElement("div", { id: ELEMENT_IDS.dvrIndicator });
 
-      const separator = document.createElement("span");
-      separator.textContent = "•";
-      separator.style.cssText = "margin-right: 8px; font-size: 1.6rem;";
+      const separator = createElement("span", {
+        textContent: "•",
+        style: { marginRight: "8px", fontSize: "1.6rem" },
+      });
 
-      const text = document.createElement("span");
-      text.textContent = "DVR disabled";
+      const text = createElement("span", { textContent: "DVR Disabled" });
 
       indicator.append(separator, text);
       timeWrapper.appendChild(indicator);

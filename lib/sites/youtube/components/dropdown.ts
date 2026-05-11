@@ -1,7 +1,7 @@
 // lib/sites/youtube/components/dropdown.ts
 
 import { storageBridge } from "@/lib/core/bridge/bridge";
-import { buildSVG } from "@/lib/core/utils";
+import { buildSVG, createElement, ELEMENT_IDS } from "@/lib/core/utils";
 
 interface DropdownConfig {
   autoLoop: boolean;
@@ -10,7 +10,7 @@ interface DropdownConfig {
   preferredQuality: string;
 }
 
-type ToggleKey = "autoLoop" | "qualityService" | "autoCaption";
+type ToggleKey = keyof Omit<DropdownConfig, "preferredQuality">;
 
 const STORAGE_KEY = "dropdown_config";
 
@@ -70,15 +70,15 @@ export class Dropdown {
   }
 
   private createContainer() {
-    this.container = document.createElement("div");
-    this.container.id = "yt-enhancer-dropdown";
+    this.container = createElement("div", { id: ELEMENT_IDS.dropdown });
   }
 
   private createButton() {
-    this.button = document.createElement("button");
-    this.button.id = "yt-enhancer-dropdown-button";
-    this.button.setAttribute("aria-label", "YT Enhancer Settings");
-    this.button.setAttribute("aria-expanded", "false");
+    this.button = createElement("button", {
+      id: ELEMENT_IDS.dropdownButton,
+      ariaLabel: "YT Enhancer Settings",
+      ariaExpanded: "false",
+    });
     this.button.appendChild(
       buildSVG(
         "0 0 24 24",
@@ -96,9 +96,7 @@ export class Dropdown {
   }
 
   private createMenu() {
-    this.menu = document.createElement("div");
-    this.menu.id = "yt-enhancer-menu";
-    this.menu.setAttribute("role", "menu");
+    this.menu = createElement("div", { id: ELEMENT_IDS.menu, role: "menu" });
 
     const header = this.createHeader();
     this.menu.appendChild(header);
@@ -111,16 +109,17 @@ export class Dropdown {
   }
 
   private createHeader(): HTMLElement {
-    const header = document.createElement("div");
-    header.id = "yt-enhancer-menu-header";
+    const header = createElement("div", { id: ELEMENT_IDS.menuHeader });
 
-    const title = document.createElement("span");
-    title.className = "header-title";
-    title.textContent = "YT Enhancer Settings";
+    const title = createElement("span", {
+      className: "header-title",
+      textContent: "YT Enhancer Settings",
+    });
 
-    const refreshButton = document.createElement("button");
-    refreshButton.className = "header-refresh";
-    refreshButton.setAttribute("aria-label", "Refresh player features");
+    const refreshButton = createElement("button", {
+      className: "header-refresh",
+      ariaLabel: "Refresh player features",
+    });
     refreshButton.appendChild(
       buildSVG("0 0 24 24", [
         {
@@ -154,15 +153,17 @@ export class Dropdown {
   }
 
   private createToggleItem(id: ToggleKey, label: string): HTMLElement {
-    const item = document.createElement("div");
-    item.className = "toggle-item";
-    item.setAttribute("data-id", id);
-    item.setAttribute("role", "menuitemcheckbox");
-    item.setAttribute("aria-checked", String(this.config[id]));
+    const item = createElement("div", {
+      className: "toggle-item",
+      attrs: { "data-id": id },
+      role: "menuitemcheckbox",
+      ariaChecked: String(this.config[id]),
+    });
 
-    const labelSpan = document.createElement("span");
-    labelSpan.className = "toggle-item-label";
-    labelSpan.textContent = label;
+    const labelSpan = createElement("span", {
+      className: "toggle-item-label",
+      textContent: label,
+    });
 
     const toggleSwitch = this.createToggleSwitch(this.config[id]);
 
@@ -171,55 +172,61 @@ export class Dropdown {
   }
 
   private createToggleSwitch(isActive: boolean): HTMLElement {
-    const toggleSwitch = document.createElement("div");
-    toggleSwitch.className = `toggle-switch ${isActive ? "active" : ""}`;
+    const toggleSwitch = createElement("div", {
+      className: `toggle-switch ${isActive ? "active" : ""}`,
+    });
 
-    const toggleKnob = document.createElement("div");
-    toggleKnob.className = "toggle-knob";
+    const toggleKnob = createElement("div", { className: "toggle-knob" });
 
     toggleSwitch.appendChild(toggleKnob);
     return toggleSwitch;
   }
 
   private createQualitySelector(): HTMLElement {
-    const container = document.createElement("div");
-    container.className = "quality-selector-container";
+    const container = createElement("div", {
+      className: "quality-selector-container",
+    });
 
-    const labelWrapper = document.createElement("div");
-    labelWrapper.className = "quality-selector-header";
+    const labelWrapper = createElement("div", {
+      className: "quality-selector-header",
+    });
 
-    const label = document.createElement("span");
-    label.className = "quality-selector-label";
-    label.textContent = "Preferred Quality";
+    const label = createElement("span", {
+      className: "quality-selector-label",
+      textContent: "Preferred Quality",
+    });
 
     const currentQuality = QUALITY_OPTIONS.find(
       (opt) => opt.value === this.config.preferredQuality,
     );
-    const badge = document.createElement("span");
-    badge.className = "quality-badge";
-    badge.id = "quality-badge";
-    badge.textContent = currentQuality?.label || "1080p";
+    const badge = createElement("span", {
+      id: "quality-badge",
+      className: "quality-badge",
+      textContent: currentQuality?.label || "1080p",
+    });
 
     labelWrapper.append(label, badge);
 
-    const selectWrapper = document.createElement("div");
-    selectWrapper.className = "quality-select-wrapper";
+    const selectWrapper = createElement("div", {
+      className: "quality-select-wrapper",
+    });
 
-    const select = document.createElement("select");
-    select.id = "quality-selector";
-    select.className = "quality-selector";
-    select.setAttribute("aria-label", "Select preferred video quality");
+    const select = createElement("select", {
+      id: "quality-selector",
+      className: "quality-selector",
+      ariaLabel: "Select preferred video quality",
+    });
 
     QUALITY_OPTIONS.forEach(({ value, label, description }) => {
-      const option = document.createElement("option");
-      option.value = value;
-      option.textContent = description ? `${label} (${description})` : label;
-      option.selected = value === this.config.preferredQuality;
+      const option = createElement("option", {
+        value: value,
+        textContent: description ? `${label} (${description})` : label,
+        selected: value === this.config.preferredQuality,
+      });
       select.appendChild(option);
     });
 
-    const icon = document.createElement("span");
-    icon.className = "quality-select-icon";
+    const icon = createElement("span", { className: "quality-select-icon" });
     icon.appendChild(
       buildSVG(
         "0 0 16 16",
