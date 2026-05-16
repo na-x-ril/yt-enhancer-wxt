@@ -7,6 +7,7 @@ import type {
   PlayerMicroformatRenderer,
 } from "./VideoData";
 import type { YouTubePlayer } from "./player";
+import type { WatchFeatureInterface } from "./feature";
 
 export type {
   Feature,
@@ -14,4 +15,5 @@ export type {
   InitialPlayerResponse,
   PlayerMicroformatRenderer,
   YouTubePlayer,
+  WatchFeatureInterface,
 };

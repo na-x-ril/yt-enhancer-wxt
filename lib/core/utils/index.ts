@@ -13,7 +13,7 @@ export const ELEMENT_IDS = {
   dropdownButton: "yt-enhancer-dropdown-button",
   menu: "yt-enhancer-menu",
   menuHeader: "yt-enhancer-menu-header",
-} as const;
+} as const satisfies Record<string, string>;
 
 export const fetchData = async (url: string): Promise<string> => {
   const res = await fetch(url);
@@ -124,7 +124,7 @@ const REQUIRED_METHODS = [
   "addEventListener",
   "removeEventListener",
   "seekTo",
-] as const;
+] as const satisfies string[];
 
 const READY_STATES = new Set([1, 2, 3]);
 
