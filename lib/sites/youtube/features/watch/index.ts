@@ -23,6 +23,7 @@ import {
   waitForElement,
   waitForPlayer,
 } from "@/lib/core/utils";
+import { SponsorBlockManager } from "../sponsorblock";
 import { Odometer } from "@/lib/core/odometer";
 import {
   BooleanKeys,
@@ -176,6 +177,7 @@ class WatchFeature {
   private cleanupHandlers: Array<() => void> = [];
   private metadataListenerAttached = false;
   private readonly parser = new ViewCountParser();
+  private sbManager: SponsorBlockManager | null = null;
 
   private createInitialState(): State {
     return {
@@ -220,6 +222,11 @@ class WatchFeature {
       await this.restoreTime();
     }
 
+    if (this.state.player && !this.state.isDestroyed) {
+      this.sbManager = new SponsorBlockManager();
+      await this.sbManager.init(this.state.player);
+    }
+
     this.registerEventListeners();
 
     return () => this.destroy();
@@ -233,6 +240,9 @@ class WatchFeature {
 
     this.odometer?.destroy();
     this.odometer = null;
+
+    this.sbManager?.destroy();
+    this.sbManager = null;
 
     for (const fn of this.cleanupHandlers) {
       try {
@@ -259,7 +269,8 @@ class WatchFeature {
         this.config.autoLoop = saved.autoLoop ?? true;
         this.config.qualityService = saved.qualityService ?? true;
         this.config.autoCaption = saved.autoCaption ?? true;
-        this.config.quality = saved.preferredQuality ?? "hd1080";
+        const pref = saved.preferredQuality;
+        this.config.quality = pref != null && pref in QUALITY_RANK ? pref : "hd1080";
       }
     } catch (error) {
       console.warn("[WatchFeature] Failed to load config:", error);

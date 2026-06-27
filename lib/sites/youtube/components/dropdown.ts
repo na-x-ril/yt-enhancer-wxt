@@ -1,13 +1,15 @@
-// lib/sites/youtube/components/dropdown.ts
-
 import { storageBridge } from "@/lib/core/bridge/bridge";
 import { buildSVG, createElement, ELEMENT_IDS } from "@/lib/core/utils";
+import { createSponsorBlockPage } from "./dropdown-pages/sponsorblock-page";
+import type { SponsorBlockConfig } from "../features/sponsorblock/types";
+import { STORAGE_KEY as SB_STORAGE_KEY, DEFAULT_CONFIG as SB_DEFAULT_CONFIG, ALL_CATEGORIES } from "../features/sponsorblock/types";
+import type { Quality } from "../types/player";
 
 interface DropdownConfig {
   autoLoop: boolean;
   qualityService: boolean;
   autoCaption: boolean;
-  preferredQuality: string;
+  preferredQuality: Quality;
 }
 
 type ToggleKey = keyof Omit<DropdownConfig, "preferredQuality">;
@@ -36,18 +38,36 @@ const QUALITY_OPTIONS = [
   { value: "medium", label: "360p", description: "" },
   { value: "small", label: "240p", description: "" },
   { value: "tiny", label: "144p", description: "" },
-] satisfies Array<{ value: string; label: string; description: string }>;
+] satisfies Array<{ value: Quality; label: string; description: string }>;
+
+type Page = 'main' | 'sponsorblock';
+
+const TOGGLE_IDS = new Set<string>(TOGGLE_ITEMS.map((t) => t.id));
+const QUALITY_VALUES = new Set<string>(QUALITY_OPTIONS.map((q) => q.value));
+
+function isToggleKey(value: string): value is ToggleKey {
+  return TOGGLE_IDS.has(value);
+}
+
+function isQuality(value: string): value is Quality {
+  return QUALITY_VALUES.has(value);
+}
 
 export class Dropdown {
   private container: HTMLElement | null = null;
   private button: HTMLElement | null = null;
   private menu: HTMLElement | null = null;
+  private mainPage: HTMLElement | null = null;
+  private sbPage: HTMLElement | null = null;
   private config: DropdownConfig = { ...DEFAULT_CONFIG };
+  private sbConfig: SponsorBlockConfig = { ...SB_DEFAULT_CONFIG };
   private isOpen = false;
+  private currentPage: Page = 'main';
   private cleanupFns: Array<() => void> = [];
 
   async init() {
     await this.loadConfig();
+    await this.loadSBConfig();
     this.createUI();
     this.attachListeners();
   }
@@ -60,6 +80,23 @@ export class Dropdown {
       }
     } catch (error) {
       console.warn("Failed to load dropdown config:", error);
+    }
+  }
+
+  private async loadSBConfig() {
+    try {
+      const saved = await storageBridge.get(SB_STORAGE_KEY);
+      if (saved) {
+        this.sbConfig = { ...SB_DEFAULT_CONFIG, ...saved };
+        if (saved.categories) {
+          this.sbConfig.categories = {
+            ...SB_DEFAULT_CONFIG.categories,
+            ...saved.categories,
+          };
+        }
+      }
+    } catch (error) {
+      console.warn("Failed to load SB config:", error);
     }
   }
 
@@ -98,14 +135,44 @@ export class Dropdown {
   private createMenu() {
     this.menu = createElement("div", { id: ELEMENT_IDS.menu, role: "menu" });
 
+    this.mainPage = createElement("div", { className: "slide-page visible" });
+    this.renderMainPageContent(this.mainPage);
+    this.menu.appendChild(this.mainPage);
+
+    this.sbPage = createElement("div", { className: "slide-page" });
+    this.sbPage.appendChild(
+      createSponsorBlockPage(
+        this.sbConfig,
+        () => this.navigateTo('main'),
+        (newConfig) => this.onSBConfigChange(newConfig),
+      ),
+    );
+    this.menu.appendChild(this.sbPage);
+  }
+
+  private navigateTo(page: Page) {
+    if (page === this.currentPage || !this.menu) return;
+
+    const prevEl = this.currentPage === 'main' ? this.mainPage : this.sbPage;
+    const nextEl = page === 'main' ? this.mainPage : this.sbPage;
+    if (!prevEl || !nextEl) return;
+
+    prevEl.classList.remove('visible');
+    this.currentPage = page;
+
+    nextEl.classList.add('visible');
+  }
+
+  private renderMainPageContent(container: HTMLElement) {
     const header = this.createHeader();
-    this.menu.appendChild(header);
+    container.appendChild(header);
 
     TOGGLE_ITEMS.forEach(({ id, label }) => {
-      this.menu?.appendChild(this.createToggleItem(id, label));
+      container.appendChild(this.createToggleItem(id, label));
     });
 
-    this.menu?.appendChild(this.createQualitySelector());
+    container.appendChild(this.createQualitySelector());
+    container.appendChild(this.createSBNavItem());
   }
 
   private createHeader(): HTMLElement {
@@ -184,15 +251,15 @@ export class Dropdown {
 
   private createQualitySelector(): HTMLElement {
     const container = createElement("div", {
-      className: "quality-selector-container",
+      className: "menu-section",
     });
 
     const labelWrapper = createElement("div", {
-      className: "quality-selector-header",
+      className: "menu-section-header",
     });
 
     const label = createElement("span", {
-      className: "quality-selector-label",
+      className: "menu-section-label",
       textContent: "Preferred Quality",
     });
 
@@ -200,8 +267,8 @@ export class Dropdown {
       (opt) => opt.value === this.config.preferredQuality,
     );
     const badge = createElement("span", {
-      id: "quality-badge",
-      className: "quality-badge",
+      id: "menu-section-badge",
+      className: "menu-section-badge",
       textContent: currentQuality?.label || "1080p",
     });
 
@@ -248,6 +315,81 @@ export class Dropdown {
     selectWrapper.append(select, icon);
     container.append(labelWrapper, selectWrapper);
     return container;
+  }
+
+  private createSBNavItem(): HTMLElement {
+    const container = createElement("div", {
+      className: "menu-section",
+    });
+
+    const header = createElement("div", {
+      className: "menu-section-header",
+    });
+
+    const label = createElement("span", {
+      className: "menu-section-label",
+      textContent: "SponsorBlock",
+    });
+
+    const nonDisabled = ALL_CATEGORIES.filter(
+      (c) => this.sbConfig.categories[c] !== 'disabled',
+    );
+    const badge = createElement("span", {
+      id: "sb-nav-badge",
+      className: "menu-section-badge",
+      textContent: nonDisabled.length === 0 ? 'Off' : `${nonDisabled.length} on`,
+    });
+
+    header.append(label, badge);
+
+    const selectWrapper = createElement("div", {
+      className: "quality-select-wrapper",
+    });
+
+    const btn = createElement("button", {
+      className: "quality-selector",
+      ariaLabel: "Configure SponsorBlock",
+    });
+    btn.textContent = "Configure →";
+
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      this.navigateTo('sponsorblock');
+    };
+
+    selectWrapper.appendChild(btn);
+    container.append(header, selectWrapper);
+    return container;
+  }
+
+  private async onSBConfigChange(newConfig: SponsorBlockConfig) {
+    this.sbConfig = newConfig;
+
+    this.refreshSBNavBadge();
+
+    try {
+      await storageBridge.set(SB_STORAGE_KEY, this.sbConfig);
+    } catch (error) {
+      console.warn("Failed to save SB config:", error);
+    }
+
+    window.dispatchEvent(
+      new CustomEvent("yt-enhancer-sb-setting", {
+        detail: { type: 'sponsorblock', config: this.sbConfig },
+      }),
+    );
+  }
+
+  private refreshSBNavBadge() {
+    if (!this.menu) return;
+
+    const badge = this.menu.querySelector<HTMLElement>("#sb-nav-badge");
+    if (!badge) return;
+
+    const nonDisabled = ALL_CATEGORIES.filter(
+      (c) => this.sbConfig.categories[c] !== 'disabled',
+    );
+    badge.textContent = nonDisabled.length === 0 ? 'Off' : `${nonDisabled.length} on`;
   }
 
   private attachListeners() {
@@ -299,9 +441,9 @@ export class Dropdown {
     const handleChange = (e: Event) => {
       const target = e.target as HTMLSelectElement;
       const quality = target.value;
+      if (!isQuality(quality)) return;
 
-      // Update badge
-      const badge = this.menu?.querySelector("#quality-badge");
+      const badge = this.menu?.querySelector("#menu-section-badge");
       const selectedOption = QUALITY_OPTIONS.find(
         (opt) => opt.value === quality,
       );
@@ -341,8 +483,8 @@ export class Dropdown {
   }
 
   private handleToggle(item: HTMLElement) {
-    const id = item.getAttribute("data-id") as ToggleKey | null;
-    if (!id || !(id in this.config)) return;
+    const raw = item.getAttribute("data-id");
+    if (!raw || !isToggleKey(raw)) return;
 
     const toggleSwitch = item.querySelector<HTMLElement>(".toggle-switch");
     if (!toggleSwitch) return;
@@ -353,10 +495,10 @@ export class Dropdown {
     this.updateToggleUI(toggleSwitch, newValue);
     item.setAttribute("aria-checked", String(newValue));
 
-    this.config[id] = newValue;
+    this.config[raw] = newValue;
 
     this.saveConfig();
-    this.dispatchSettingChange(id, newValue);
+    this.dispatchSettingChange(raw, newValue);
   }
 
   private updateToggleUI(toggleSwitch: HTMLElement, isActive: boolean) {
@@ -377,6 +519,10 @@ export class Dropdown {
 
   private openMenu() {
     if (!this.menu || !this.button) return;
+
+    if (this.currentPage !== 'main') {
+      this.currentPage = 'main';
+    }
 
     this.menu.classList.add("open");
     this.button.classList.add("active");
@@ -467,6 +613,8 @@ export class Dropdown {
     this.container = null;
     this.button = null;
     this.menu = null;
+    this.mainPage = null;
+    this.sbPage = null;
     this.isOpen = false;
   }
 
