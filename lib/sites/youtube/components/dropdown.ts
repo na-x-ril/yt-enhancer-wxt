@@ -14,12 +14,12 @@ type ToggleKey = keyof Omit<DropdownConfig, "preferredQuality">;
 
 const STORAGE_KEY = "dropdown_config";
 
-const DEFAULT_CONFIG: DropdownConfig = {
+const DEFAULT_CONFIG = {
   autoLoop: true,
   qualityService: true,
   autoCaption: true,
   preferredQuality: "hd1080",
-};
+} satisfies DropdownConfig;
 
 const TOGGLE_ITEMS: Array<{ id: ToggleKey; label: string }> = [
   { id: "autoLoop", label: "Auto Loop" },
@@ -36,7 +36,7 @@ const QUALITY_OPTIONS = [
   { value: "medium", label: "360p", description: "" },
   { value: "small", label: "240p", description: "" },
   { value: "tiny", label: "144p", description: "" },
-];
+] satisfies Array<{ value: string; label: string; description: string }>;
 
 export class Dropdown {
   private container: HTMLElement | null = null;

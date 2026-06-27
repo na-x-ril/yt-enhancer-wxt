@@ -5,6 +5,7 @@ import type {
   InitialData,
   InitialPlayerResponse,
   PlayerMicroformatRenderer,
+  WatchFeatureInterface,
 } from "../../types";
 import { storageBridge } from "@/lib/core/bridge/bridge";
 import type {
@@ -23,69 +24,23 @@ import {
   waitForPlayer,
 } from "@/lib/core/utils";
 import { Odometer } from "@/lib/core/odometer";
+import {
+  BooleanKeys,
+  Config,
+  DEFAULT_CONFIG,
+  Quality,
+  QUALITY_RANK,
+  SettingEvent,
+  State,
+  VideoState,
+} from "../../types/player";
 
-const VideoState = {
-  VOD: 1,
-  PAST_LIVE: 2,
-  LIVE: 3,
-  UPCOMING: 4,
-} as const;
-
-type VideoStateValue = (typeof VideoState)[keyof typeof VideoState];
-
-interface State {
-  id: string | null;
-  state: VideoStateValue | null;
-  player: YouTubePlayer | null;
-  playerResponse: InitialPlayerResponse | null;
-  videoBadges: string[];
-  currentViewCount: number;
-  currentDateText: string;
-  lastSavedTime: number;
-  isDestroyed: boolean;
-  isCaptionActive: boolean;
-}
-
-interface Config {
-  autoLoop: boolean;
-  autoCaption: boolean;
-  qualityService: boolean;
-  quality: string;
-}
-
-type BooleanKeys<T> = {
-  [K in keyof T]: T[K] extends boolean ? K : never;
-}[keyof T];
-
-type SettingEvent = {
-  setting: BooleanKeys<Config>;
-  value: boolean;
-};
-
-const QUALITY_RANK: Record<string, number> = {
-  highres: 8,
-  hd1440: 7,
-  hd1080: 6,
-  hd720: 5,
-  large: 4,
-  medium: 3,
-  small: 2,
-  tiny: 1,
-};
-
-const DEFAULT_CONFIG: Config = {
-  autoLoop: true,
-  autoCaption: true,
-  qualityService: true,
-  quality: "hd1080",
-};
-
-const getAvailableQualities = (response: InitialPlayerResponse): string[] => {
+const getAvailableQualities = (response: InitialPlayerResponse): Quality[] => {
   const formats = [
     ...(response.streamingData?.formats ?? []),
     ...(response.streamingData?.adaptiveFormats ?? []),
   ];
-  const qualities = new Set<string>();
+  const qualities = new Set<Quality>();
   for (const fmt of formats) {
     if (fmt.quality && QUALITY_RANK[fmt.quality]) {
       qualities.add(fmt.quality);
@@ -94,7 +49,10 @@ const getAvailableQualities = (response: InitialPlayerResponse): string[] => {
   return Array.from(qualities);
 };
 
-const selectBestQuality = (preferred: string, available: string[]): string => {
+const selectBestQuality = (
+  preferred: Quality,
+  available: Quality[],
+): string => {
   if (available.length === 0) return preferred;
 
   const preferredRank = QUALITY_RANK[preferred] ?? 0;
@@ -538,7 +496,7 @@ class WatchFeature {
 
   private async setQuality(
     player: YouTubePlayer,
-    quality: string,
+    quality: Quality,
   ): Promise<void> {
     if (this.state.isDestroyed || !this.config.qualityService) return;
     const available = getAvailableQualities(this.state.playerResponse!);
@@ -629,8 +587,8 @@ class WatchFeature {
   // ─── Video Data ───────────────────────────────────────────────────────────
 
   private parseVideoPage(html: string): {
-    ytInitialData: string | null;
-    ytInitialPlayerResponse: string | null;
+    ytInitialData: InitialData | null;
+    ytInitialPlayerResponse: InitialPlayerResponse | null;
   } {
     const initialDataMatch = html.match(/var ytInitialData\s*=\s*(\{.*?\});/);
     const initialPlayerResponseMatch = html.match(
@@ -638,14 +596,15 @@ class WatchFeature {
     );
 
     return {
-      ytInitialData: initialDataMatch?.[1] ?? null,
-      ytInitialPlayerResponse: initialPlayerResponseMatch?.[1] ?? null,
+      ytInitialData: JSON.parse(initialDataMatch?.[1]!) ?? null,
+      ytInitialPlayerResponse:
+        JSON.parse(initialPlayerResponseMatch?.[1]!) ?? null,
     };
   }
 
   async fetchVideoData(url: string): Promise<{
-    ytInitialData: string | null;
-    ytInitialPlayerResponse: string | null;
+    ytInitialData: InitialData | null;
+    ytInitialPlayerResponse: InitialPlayerResponse | null;
   }> {
     const html = await fetchData(url);
     return this.parseVideoPage(html);
@@ -753,10 +712,8 @@ class WatchFeature {
 
       if (!data.ytInitialData || !data.ytInitialPlayerResponse) return;
 
-      const ytInitialDataObj = JSON.parse(data.ytInitialData) as InitialData;
-      const ytInitialPlayerResponseObj = JSON.parse(
-        data.ytInitialPlayerResponse,
-      ) as InitialPlayerResponse;
+      const ytInitialDataObj = data.ytInitialData;
+      const ytInitialPlayerResponseObj = data.ytInitialPlayerResponse;
 
       this.state.playerResponse = ytInitialPlayerResponseObj;
 
@@ -1056,4 +1013,4 @@ export const watchFeature = {
   match: (path: string) => path === "/watch",
   init: () => watchFeatureInstance.init(),
   fetchVideoData: (url: string) => watchFeatureInstance.fetchVideoData(url),
-};
+} satisfies WatchFeatureInterface;
