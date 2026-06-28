@@ -209,7 +209,8 @@ class WatchFeature {
     await this.loadConfig();
     this.setupMetadataListener();
 
-    await Promise.all([this.fetchAndLogVideoData(), this.handleVideo()]);
+    await this.fetchAndLogVideoData();
+    await this.handleVideo();
 
     if (
       this.state.player &&
@@ -258,7 +259,6 @@ class WatchFeature {
     this.metadataListenerAttached = false;
   }
 
-
   private async loadConfig(): Promise<void> {
     try {
       const saved = await storageBridge.get("dropdown_config");
@@ -268,13 +268,13 @@ class WatchFeature {
         this.config.autoCaption = saved.autoCaption ?? true;
         this.config.sbEnabled = saved.sbEnabled ?? true;
         const pref = saved.preferredQuality;
-        this.config.quality = pref != null && pref in QUALITY_RANK ? pref : "hd1080";
+        this.config.quality =
+          pref != null && pref in QUALITY_RANK ? pref : "hd1080";
       }
     } catch (error) {
       console.warn("[WatchFeature] Failed to load config:", error);
     }
   }
-
 
   private registerEventListeners(): void {
     const handleBeforeUnload = () => void this.saveTime();
@@ -317,7 +317,6 @@ class WatchFeature {
       this.handleMetadataUpdate(actions);
     });
   }
-
 
   private async onRefresh(): Promise<void> {
     if (this.state.isDestroyed) return;
@@ -450,7 +449,6 @@ class WatchFeature {
     }
   }
 
-
   private async handleVideo(): Promise<void> {
     if (this.state.isDestroyed) return;
     try {
@@ -520,7 +518,6 @@ class WatchFeature {
     const finalQuality = selectBestQuality(quality, available);
     await player.setPlaybackQualityRange(finalQuality);
   }
-
 
   private canTrackTime(): boolean {
     return (
@@ -600,7 +597,6 @@ class WatchFeature {
     }
   }
 
-
   private parseVideoPage(html: string): {
     ytInitialData: InitialData | null;
     ytInitialPlayerResponse: InitialPlayerResponse | null;
@@ -611,9 +607,12 @@ class WatchFeature {
     );
 
     return {
-      ytInitialData: JSON.parse(initialDataMatch?.[1]!) ?? null,
-      ytInitialPlayerResponse:
-        JSON.parse(initialPlayerResponseMatch?.[1]!) ?? null,
+      ytInitialData: initialDataMatch?.[1]
+        ? JSON.parse(initialDataMatch[1])
+        : null,
+      ytInitialPlayerResponse: initialPlayerResponseMatch?.[1]
+        ? JSON.parse(initialPlayerResponseMatch[1])
+        : null,
     };
   }
 
@@ -659,7 +658,8 @@ class WatchFeature {
   private getViewCount(data: InitialData): string | null {
     const contents =
       data.contents.twoColumnWatchNextResults?.results.results.contents;
-    const videoPrimaryInfo = this.findVideoPrimaryInfo(contents!);
+    if (!contents) return null;
+    const videoPrimaryInfo = this.findVideoPrimaryInfo(contents);
 
     if (!videoPrimaryInfo?.videoPrimaryInfoRenderer) return null;
 
@@ -768,7 +768,6 @@ class WatchFeature {
       console.warn("[WatchFeature] Fetch video data error:", error);
     }
   }
-
 
   private createSeparator(): HTMLElement {
     const separator = createElement("span", { textContent: "•" });

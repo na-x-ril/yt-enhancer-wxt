@@ -44,10 +44,5 @@ export function showSkipButton(segment: Segment, onSkip: () => void): void {
 
 export function hideSkipButton(): void {
   const existing = document.getElementById(BUTTON_ID);
-  if (existing) {
-    existing.style.opacity = "0";
-    existing.style.transform = "translateY(8px)";
-    existing.style.pointerEvents = "none";
-    setTimeout(() => existing.remove(), 200);
-  }
+  if (existing) existing.remove();
 }
