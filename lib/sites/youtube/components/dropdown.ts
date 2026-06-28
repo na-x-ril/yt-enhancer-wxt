@@ -1,7 +1,7 @@
 import { storageBridge } from "@/lib/core/bridge/bridge";
 import { buildSVG, createElement, ELEMENT_IDS } from "@/lib/core/utils";
 import { createSponsorBlockPage } from "./dropdown-pages/sponsorblock-page";
-import type { SponsorBlockConfig } from "../features/sponsorblock/types";
+import type { SponsorBlockConfig, SBMode } from "../features/sponsorblock/types";
 import { STORAGE_KEY as SB_STORAGE_KEY, DEFAULT_CONFIG as SB_DEFAULT_CONFIG, ALL_CATEGORIES } from "../features/sponsorblock/types";
 import type { Quality } from "../types/player";
 
@@ -10,6 +10,7 @@ interface DropdownConfig {
   qualityService: boolean;
   autoCaption: boolean;
   preferredQuality: Quality;
+  sbEnabled: boolean;
 }
 
 type ToggleKey = keyof Omit<DropdownConfig, "preferredQuality">;
@@ -21,12 +22,14 @@ const DEFAULT_CONFIG = {
   qualityService: true,
   autoCaption: true,
   preferredQuality: "hd1080",
+  sbEnabled: true,
 } satisfies DropdownConfig;
 
 const TOGGLE_ITEMS: Array<{ id: ToggleKey; label: string }> = [
   { id: "autoLoop", label: "Auto Loop" },
   { id: "qualityService", label: "Quality Service" },
   { id: "autoCaption", label: "Auto Caption" },
+  { id: "sbEnabled", label: "SponsorBlock" },
 ];
 
 const QUALITY_OPTIONS = [
@@ -51,6 +54,12 @@ function isToggleKey(value: string): value is ToggleKey {
 
 function isQuality(value: string): value is Quality {
   return QUALITY_VALUES.has(value);
+}
+
+const SB_VALID_MODES: SBMode[] = ["auto", "show_skip", "disabled"];
+
+function sanitizeSBMode(mode: string): SBMode {
+  return SB_VALID_MODES.includes(mode as SBMode) ? (mode as SBMode) : "disabled";
 }
 
 export class Dropdown {
@@ -89,10 +98,11 @@ export class Dropdown {
       if (saved) {
         this.sbConfig = { ...SB_DEFAULT_CONFIG, ...saved };
         if (saved.categories) {
-          this.sbConfig.categories = {
-            ...SB_DEFAULT_CONFIG.categories,
-            ...saved.categories,
-          };
+          const merged = { ...SB_DEFAULT_CONFIG.categories, ...saved.categories };
+          for (const cat of ALL_CATEGORIES) {
+            merged[cat] = sanitizeSBMode(merged[cat]);
+          }
+          this.sbConfig.categories = merged;
         }
       }
     } catch (error) {

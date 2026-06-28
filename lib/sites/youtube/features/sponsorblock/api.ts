@@ -1,14 +1,21 @@
-import { storageBridge } from '@/lib/core/bridge/bridge';
-import { SB_API_BASE, CACHE_DURATION_MS } from './constants';
-import type { Segment, CachedSegments, SponsorBlockConfig, SponsorBlockCategory } from './types';
+import { storageBridge } from "@/lib/core/bridge/bridge";
+import { SB_API_BASE, CACHE_DURATION_MS } from "./constants";
+import type {
+  Segment,
+  CachedSegments,
+  SponsorBlockConfig,
+  SponsorBlockCategory,
+} from "./types";
 
 function cacheKey(videoId: string): string {
   return `sb_cache_${videoId}`;
 }
 
-export function getActiveCategories(config: SponsorBlockConfig): SponsorBlockCategory[] {
+export function getActiveCategories(
+  config: SponsorBlockConfig,
+): SponsorBlockCategory[] {
   return Object.entries(config.categories)
-    .filter(([, mode]) => mode !== 'disabled')
+    .filter(([, mode]) => mode !== "disabled")
     .map(([cat]) => cat as SponsorBlockCategory);
 }
 
@@ -17,9 +24,10 @@ export async function fetchSegments(
   config: SponsorBlockConfig,
 ): Promise<Segment[]> {
   const key = cacheKey(videoId);
-  const cached = await storageBridge.get(key) as CachedSegments | null;
+  const cached = (await storageBridge.get(key)) satisfies CachedSegments | null;
 
   if (cached && Date.now() - cached.timestamp < CACHE_DURATION_MS) {
+    console.log("Key cached:", cached);
     return cached.segments;
   }
 
@@ -35,7 +43,10 @@ export async function fetchSegments(
       throw new Error(`SB API: ${res.status}`);
     }
     const segments: Segment[] = await res.json();
-    await storageBridge.set(key, { segments, timestamp: Date.now() } satisfies CachedSegments);
+    await storageBridge.set(key, {
+      segments,
+      timestamp: Date.now(),
+    } satisfies CachedSegments);
     return segments;
   } catch (error) {
     if (cached) return cached.segments;
@@ -48,5 +59,5 @@ export async function clearCache(videoId: string): Promise<void> {
 }
 
 export function isFullyDisabled(config: SponsorBlockConfig): boolean {
-  return Object.values(config.categories).every((m) => m === 'disabled');
+  return Object.values(config.categories).every((m) => m === "disabled");
 }

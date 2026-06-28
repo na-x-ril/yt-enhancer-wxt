@@ -1,27 +1,12 @@
-// SponsorBlock styles
-
-// SB progress bar markers container
-#yt-enhancer-sb-markers {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: 1;
-}
-
-// Individual marker
 .yt-enhancer-sb-marker {
   position: absolute;
-  height: 5px;
+  top: 0;
+  height: 100%;
   pointer-events: none;
-  z-index: 1;
+  z-index: 42;
   opacity: 0.8;
-  border-radius: 2px;
 }
 
-// Floating skip button
 #yt-enhancer-sb-skip-btn {
   position: absolute;
   bottom: 140px;
@@ -29,28 +14,34 @@
   z-index: 1000;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 18px;
+  gap: 4px;
+  padding: 6px 12px;
   border: none;
-  border-radius: 6px;
-  background: rgba(0, 0, 0, 0.85);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.6);
   color: #fff;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   backdrop-filter: blur(8px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
   opacity: 0;
   transform: translateY(8px);
   pointer-events: none;
 
+  svg {
+    width: 30px;
+    height: 30px;
+  }
+
   &:hover {
-    background: rgba(0, 0, 0, 0.95);
+    background: rgba(0, 0, 0, 0.68);
   }
 }
 
-// Fullscreen override
 .ytp-fullscreen #yt-enhancer-sb-skip-btn {
   bottom: 186px;
 }

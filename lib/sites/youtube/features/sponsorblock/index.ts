@@ -1,11 +1,17 @@
-import { storageBridge } from '@/lib/core/bridge/bridge';
-import type { YouTubePlayer } from '../../types/player';
-import { getVideoId } from '@/lib/core/utils';
-import { fetchSegments, clearCache, getActiveCategories, isFullyDisabled } from './api';
-import { renderSegments, clearMarkers } from './progress-bar';
-import { showSkipButton, hideSkipButton } from './skip-button';
-import { STORAGE_KEY, DEFAULT_CONFIG, ALL_CATEGORIES } from './types';
-import type { Segment, SponsorBlockConfig, SBMode } from './types';
+import { storageBridge } from "@/lib/core/bridge/bridge";
+import type { YouTubePlayer } from "../../types/player";
+import { getVideoId } from "@/lib/core/utils";
+import { fetchSegments, clearCache, isFullyDisabled } from "./api";
+import { renderSegments, clearMarkers } from "./progress-bar";
+import { showSkipButton, hideSkipButton } from "./skip-button";
+import { STORAGE_KEY, DEFAULT_CONFIG, ALL_CATEGORIES } from "./types";
+import type { Segment, SponsorBlockConfig, SBMode } from "./types";
+
+const VALID_MODES: SBMode[] = ["auto", "show_skip", "disabled"];
+
+function sanitizeMode(mode: string): SBMode {
+  return VALID_MODES.includes(mode as SBMode) ? (mode as SBMode) : "disabled";
+}
 
 export class SponsorBlockManager {
   private config: SponsorBlockConfig = { ...DEFAULT_CONFIG };
@@ -16,6 +22,7 @@ export class SponsorBlockManager {
   private lastSegmentIndex = -1;
   private isDestroyed = false;
   private timeCheckInterval: ReturnType<typeof setInterval> | null = null;
+  private currentSkipCallback: (() => void) | null = null;
 
   async init(player: YouTubePlayer): Promise<void> {
     if (this.isDestroyed) return;
@@ -25,7 +32,6 @@ export class SponsorBlockManager {
 
     await this.loadConfig();
     await this.fetchAndRender();
-    this.startTimeCheck();
     this.registerListeners();
   }
 
@@ -34,7 +40,7 @@ export class SponsorBlockManager {
     if (this.isDestroyed || !this.videoId) return;
 
     if (isFullyDisabled(this.config)) {
-      this.cleanupTimeCheck();
+      this.stopTimeCheck();
       clearMarkers();
       hideSkipButton();
       this.segments = [];
@@ -42,7 +48,6 @@ export class SponsorBlockManager {
     }
 
     await this.fetchAndRender();
-    if (!this.timeCheckInterval) this.startTimeCheck();
   }
 
   private async loadConfig(): Promise<void> {
@@ -51,14 +56,15 @@ export class SponsorBlockManager {
       if (saved) {
         this.config = { ...DEFAULT_CONFIG, ...saved };
         if (saved.categories) {
-          this.config.categories = {
-            ...DEFAULT_CONFIG.categories,
-            ...saved.categories,
-          };
+          const merged = { ...DEFAULT_CONFIG.categories, ...saved.categories };
+          for (const cat of ALL_CATEGORIES) {
+            merged[cat] = sanitizeMode(merged[cat]);
+          }
+          this.config.categories = merged;
         }
       }
     } catch {
-      console.warn('[SB] Failed to load config');
+      console.warn("[SB] Failed to load config");
     }
   }
 
@@ -67,52 +73,49 @@ export class SponsorBlockManager {
 
     try {
       this.segments = await fetchSegments(this.videoId, this.config);
-    } catch (error) {
-      console.warn('[SB] Fetch error:', error);
+    } catch {
       this.segments = [];
     }
 
-    this.renderProgressBar();
-  }
-
-  private renderProgressBar(): void {
-    if (isFullyDisabled(this.config)) {
-      clearMarkers();
-      return;
-    }
-
-    const duration = this.player?.getDuration();
-    if (!duration || duration <= 0 || this.segments.length === 0) {
-      clearMarkers();
-      return;
-    }
-
-    const cleanup = renderSegments(this.segments, duration);
-    this.cleanupFns.push(cleanup);
+    renderSegments(this.segments, this.player?.getDuration() ?? 0);
+    this.syncTimeCheck();
   }
 
   private startTimeCheck(): void {
-    this.cleanupTimeCheck();
-
+    if (this.timeCheckInterval) return;
     this.timeCheckInterval = setInterval(() => {
       this.checkCurrentSegment();
-    }, 500);
+    }, 250);
   }
 
-  private cleanupTimeCheck(): void {
+  private stopTimeCheck(): void {
     if (this.timeCheckInterval !== null) {
       clearInterval(this.timeCheckInterval);
       this.timeCheckInterval = null;
     }
   }
 
-  private checkCurrentSegment(): void {
-    if (!this.player || this.isDestroyed || isFullyDisabled(this.config)) {
-      return;
+  private syncTimeCheck(): void {
+    if (this.segments.length > 0) {
+      this.startTimeCheck();
+    } else {
+      this.stopTimeCheck();
     }
+  }
+
+  private handleKeydown = (e: KeyboardEvent): void => {
+    if (e.key === "Enter" && this.currentSkipCallback) {
+      this.currentSkipCallback();
+      this.currentSkipCallback = null;
+    }
+  };
+
+  private checkCurrentSegment(): void {
+    if (!this.player || this.isDestroyed || isFullyDisabled(this.config))
+      return;
 
     const currentTime = this.player.getCurrentTime();
-    if (typeof currentTime !== 'number') return;
+    if (typeof currentTime !== "number") return;
 
     let foundIndex = -1;
     for (let i = 0; i < this.segments.length; i++) {
@@ -129,21 +132,26 @@ export class SponsorBlockManager {
       this.lastSegmentIndex = foundIndex;
 
       if (foundIndex === -1) {
+        this.currentSkipCallback = null;
         hideSkipButton();
         return;
       }
 
       const segment = this.segments[foundIndex];
-      const mode = this.config.categories[segment.category] || 'disabled';
+      const mode = this.config.categories[segment.category] || "disabled";
 
-      if (mode === 'auto') {
+      if (mode === "auto") {
         this.player!.seekTo(segment.segment[1], true);
         this.lastSegmentIndex = -1;
-      } else if (mode === 'show_skip') {
-        showSkipButton(segment, () => {
+      } else if (mode === "show_skip") {
+        const onSkip = () => {
           this.player!.seekTo(segment.segment[1], true);
           this.lastSegmentIndex = -1;
-        });
+          this.currentSkipCallback = null;
+          hideSkipButton();
+        };
+        this.currentSkipCallback = onSkip;
+        showSkipButton(segment, onSkip);
       }
     }
   }
@@ -156,14 +164,17 @@ export class SponsorBlockManager {
     const handleSetting = (e: Event) => {
       if (this.isDestroyed) return;
       const detail = (e as CustomEvent).detail;
-      if (!detail || detail.type !== 'sponsorblock') return;
+      if (!detail || detail.type !== "sponsorblock") return;
       this.onSBConfigChange(detail.config as SponsorBlockConfig);
     };
 
-    window.addEventListener('yt-enhancer-sb-setting', handleSetting);
-    this.cleanupFns.push(() =>
-      window.removeEventListener('yt-enhancer-sb-setting', handleSetting),
-    );
+    window.addEventListener("yt-enhancer-sb-setting", handleSetting);
+    document.addEventListener("keydown", this.handleKeydown);
+
+    this.cleanupFns.push(() => {
+      window.removeEventListener("yt-enhancer-sb-setting", handleSetting);
+      document.removeEventListener("keydown", this.handleKeydown);
+    });
   }
 
   async refreshCache(): Promise<void> {
@@ -175,7 +186,7 @@ export class SponsorBlockManager {
 
   destroy(): void {
     this.isDestroyed = true;
-    this.cleanupTimeCheck();
+    this.stopTimeCheck();
     hideSkipButton();
     clearMarkers();
 
@@ -188,5 +199,6 @@ export class SponsorBlockManager {
     this.segments = [];
     this.player = null;
     this.lastSegmentIndex = -1;
+    this.currentSkipCallback = null;
   }
 }

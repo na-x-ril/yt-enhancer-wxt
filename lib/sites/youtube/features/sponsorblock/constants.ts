@@ -1,7 +1,7 @@
 import type { SponsorBlockCategory, SBMode } from "./types";
 
 export const SB_API_BASE = "https://sponsor.ajay.app/api";
-export const CACHE_DURATION_MS = 3 * 60 * 60 * 1000; // 3 hours
+export const CACHE_DURATION_MS = 3 * 60 * 60 * 1000;
 
 export const CATEGORY_COLORS: Record<SponsorBlockCategory, string> = {
   sponsor: "#00ff00",

@@ -1,48 +1,75 @@
-import { createElement } from '@/lib/core/utils';
 import { CATEGORY_COLORS } from './constants';
 import type { Segment } from './types';
 
+const CHAPTERS_SEL = '.ytp-chapters-container';
+const PROGRESS_LIST_SEL = '.ytp-progress-list';
 const MARKER_CLASS = 'yt-enhancer-sb-marker';
+
+interface ChapterRect {
+  left: number;
+  width: number;
+  list: HTMLElement;
+}
 
 export function renderSegments(
   segments: Segment[],
   duration: number,
-): () => void {
-  const container = getOrCreateContainer();
-  if (!container) return () => {};
+): void {
+  clearMarkers();
 
-  container.textContent = '';
+  const container = document.querySelector(CHAPTERS_SEL) as HTMLElement | null;
+  if (!container) return;
 
-  for (const seg of segments) {
-    const startPct = (seg.segment[0] / duration) * 100;
-    const widthPct = ((seg.segment[1] - seg.segment[0]) / duration) * 100;
-    if (widthPct <= 0) continue;
+  const containerRect = container.getBoundingClientRect();
+  const totalWidth = containerRect.width;
+  if (totalWidth <= 0) return;
 
-    const marker = createElement('div', { className: MARKER_CLASS });
-    marker.style.left = `${startPct}%`;
-    marker.style.width = `${widthPct}%`;
-    marker.style.background = CATEGORY_COLORS[seg.category] || '#888';
-    container.appendChild(marker);
+  const chapters: ChapterRect[] = [];
+  for (const child of container.children) {
+    const el = child as HTMLElement;
+    const list = el.querySelector(PROGRESS_LIST_SEL) as HTMLElement | null;
+    if (!list) continue;
+
+    const rect = el.getBoundingClientRect();
+    chapters.push({
+      left: rect.left - containerRect.left,
+      width: rect.width,
+      list,
+    });
   }
 
-  return () => {
-    container.textContent = '';
-  };
-}
+  if (chapters.length === 0) return;
 
-function getOrCreateContainer(): HTMLElement | null {
-  let container = document.getElementById('yt-enhancer-sb-markers');
-  if (container) return container;
+  for (const { left, width, list } of chapters) {
+    list.style.position = 'relative';
 
-  const timedMarkers = document.querySelector('.ytp-timed-markers-container');
-  if (!timedMarkers) return null;
+    const chStartPct = (left / totalWidth) * 100;
+    const chWidthPct = (width / totalWidth) * 100;
+    const chEndPct = chStartPct + chWidthPct;
 
-  container = createElement('div', { id: 'yt-enhancer-sb-markers' });
-  timedMarkers.insertAdjacentElement('beforebegin', container);
-  return container;
+    for (const seg of segments) {
+      const segStartPct = (seg.segment[0] / duration) * 100;
+      const segEndPct = (seg.segment[1] / duration) * 100;
+
+      if (segEndPct <= chStartPct || segStartPct >= chEndPct) continue;
+
+      const overlapStart = Math.max(segStartPct, chStartPct);
+      const overlapEnd = Math.min(segEndPct, chEndPct);
+      const relStart = ((overlapStart - chStartPct) / chWidthPct) * 100;
+      const relEnd = ((overlapEnd - chStartPct) / chWidthPct) * 100;
+      const markerWidth = relEnd - relStart;
+      if (markerWidth <= 0) continue;
+
+      const marker = document.createElement('div');
+      marker.className = MARKER_CLASS;
+      marker.style.left = `${relStart}%`;
+      marker.style.width = `${markerWidth}%`;
+      marker.style.background = CATEGORY_COLORS[seg.category] || '#888';
+      list.appendChild(marker);
+    }
+  }
 }
 
 export function clearMarkers(): void {
-  const container = document.getElementById('yt-enhancer-sb-markers');
-  if (container) container.textContent = '';
+  document.querySelectorAll(`.${MARKER_CLASS}`).forEach(el => el.remove());
 }

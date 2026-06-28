@@ -194,8 +194,6 @@ class WatchFeature {
     };
   }
 
-  // ─── Lifecycle ────────────────────────────────────────────────────────────
-
   async init(): Promise<() => void> {
     const currentId = getVideoId();
     const previousId = this.state.id;
@@ -222,7 +220,7 @@ class WatchFeature {
       await this.restoreTime();
     }
 
-    if (this.state.player && !this.state.isDestroyed) {
+    if (this.config.sbEnabled && this.state.player && !this.state.isDestroyed) {
       this.sbManager = new SponsorBlockManager();
       await this.sbManager.init(this.state.player);
     }
@@ -260,7 +258,6 @@ class WatchFeature {
     this.metadataListenerAttached = false;
   }
 
-  // ─── Config ───────────────────────────────────────────────────────────────
 
   private async loadConfig(): Promise<void> {
     try {
@@ -269,6 +266,7 @@ class WatchFeature {
         this.config.autoLoop = saved.autoLoop ?? true;
         this.config.qualityService = saved.qualityService ?? true;
         this.config.autoCaption = saved.autoCaption ?? true;
+        this.config.sbEnabled = saved.sbEnabled ?? true;
         const pref = saved.preferredQuality;
         this.config.quality = pref != null && pref in QUALITY_RANK ? pref : "hd1080";
       }
@@ -277,7 +275,6 @@ class WatchFeature {
     }
   }
 
-  // ─── Event Listeners ──────────────────────────────────────────────────────
 
   private registerEventListeners(): void {
     const handleBeforeUnload = () => void this.saveTime();
@@ -321,7 +318,6 @@ class WatchFeature {
     });
   }
 
-  // ─── Event Handlers ───────────────────────────────────────────────────────
 
   private async onRefresh(): Promise<void> {
     if (this.state.isDestroyed) return;
@@ -371,6 +367,17 @@ class WatchFeature {
       } else if (!value && this.state.isCaptionActive) {
         this.state.player.toggleSubtitles();
         this.state.isCaptionActive = false;
+      }
+    },
+    sbEnabled: (value) => {
+      this.config.sbEnabled = value;
+      if (value && this.state.player && !this.state.isDestroyed) {
+        if (this.sbManager) this.sbManager.destroy();
+        this.sbManager = new SponsorBlockManager();
+        void this.sbManager.init(this.state.player);
+      } else if (!value) {
+        this.sbManager?.destroy();
+        this.sbManager = null;
       }
     },
   };
@@ -443,7 +450,6 @@ class WatchFeature {
     }
   }
 
-  // ─── Player Features ──────────────────────────────────────────────────────
 
   private async handleVideo(): Promise<void> {
     if (this.state.isDestroyed) return;
@@ -515,7 +521,6 @@ class WatchFeature {
     await player.setPlaybackQualityRange(finalQuality);
   }
 
-  // ─── Time Tracking ────────────────────────────────────────────────────────
 
   private canTrackTime(): boolean {
     return (
@@ -595,7 +600,6 @@ class WatchFeature {
     }
   }
 
-  // ─── Video Data ───────────────────────────────────────────────────────────
 
   private parseVideoPage(html: string): {
     ytInitialData: InitialData | null;
@@ -765,7 +769,6 @@ class WatchFeature {
     }
   }
 
-  // ─── UI ───────────────────────────────────────────────────────────────────
 
   private createSeparator(): HTMLElement {
     const separator = createElement("span", { textContent: "•" });
