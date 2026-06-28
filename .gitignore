@@ -27,6 +27,7 @@ web-ext.config.ts
 .dev
 .zed/
 lib/sites/youtube/features/watch/index.dev.ts
+lib/sites/youtube/features/sponsorblock/test-data.ts
 
 # AI assistant instructions
 AGENTS.md

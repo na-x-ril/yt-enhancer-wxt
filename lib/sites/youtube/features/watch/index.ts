@@ -23,6 +23,7 @@ import {
   waitForElement,
   waitForPlayer,
 } from "@/lib/core/utils";
+import { SponsorBlockManager } from "../sponsorblock";
 import { Odometer } from "@/lib/core/odometer";
 import {
   BooleanKeys,
@@ -176,6 +177,7 @@ class WatchFeature {
   private cleanupHandlers: Array<() => void> = [];
   private metadataListenerAttached = false;
   private readonly parser = new ViewCountParser();
+  private sbManager: SponsorBlockManager | null = null;
 
   private createInitialState(): State {
     return {
@@ -191,8 +193,6 @@ class WatchFeature {
       isCaptionActive: false,
     };
   }
-
-  // ─── Lifecycle ────────────────────────────────────────────────────────────
 
   async init(): Promise<() => void> {
     const currentId = getVideoId();
@@ -220,6 +220,11 @@ class WatchFeature {
       await this.restoreTime();
     }
 
+    if (this.config.sbEnabled && this.state.player && !this.state.isDestroyed) {
+      this.sbManager = new SponsorBlockManager();
+      await this.sbManager.init(this.state.player);
+    }
+
     this.registerEventListeners();
 
     return () => this.destroy();
@@ -233,6 +238,9 @@ class WatchFeature {
 
     this.odometer?.destroy();
     this.odometer = null;
+
+    this.sbManager?.destroy();
+    this.sbManager = null;
 
     for (const fn of this.cleanupHandlers) {
       try {
@@ -250,7 +258,6 @@ class WatchFeature {
     this.metadataListenerAttached = false;
   }
 
-  // ─── Config ───────────────────────────────────────────────────────────────
 
   private async loadConfig(): Promise<void> {
     try {
@@ -259,14 +266,15 @@ class WatchFeature {
         this.config.autoLoop = saved.autoLoop ?? true;
         this.config.qualityService = saved.qualityService ?? true;
         this.config.autoCaption = saved.autoCaption ?? true;
-        this.config.quality = saved.preferredQuality ?? "hd1080";
+        this.config.sbEnabled = saved.sbEnabled ?? true;
+        const pref = saved.preferredQuality;
+        this.config.quality = pref != null && pref in QUALITY_RANK ? pref : "hd1080";
       }
     } catch (error) {
       console.warn("[WatchFeature] Failed to load config:", error);
     }
   }
 
-  // ─── Event Listeners ──────────────────────────────────────────────────────
 
   private registerEventListeners(): void {
     const handleBeforeUnload = () => void this.saveTime();
@@ -310,7 +318,6 @@ class WatchFeature {
     });
   }
 
-  // ─── Event Handlers ───────────────────────────────────────────────────────
 
   private async onRefresh(): Promise<void> {
     if (this.state.isDestroyed) return;
@@ -360,6 +367,17 @@ class WatchFeature {
       } else if (!value && this.state.isCaptionActive) {
         this.state.player.toggleSubtitles();
         this.state.isCaptionActive = false;
+      }
+    },
+    sbEnabled: (value) => {
+      this.config.sbEnabled = value;
+      if (value && this.state.player && !this.state.isDestroyed) {
+        if (this.sbManager) this.sbManager.destroy();
+        this.sbManager = new SponsorBlockManager();
+        void this.sbManager.init(this.state.player);
+      } else if (!value) {
+        this.sbManager?.destroy();
+        this.sbManager = null;
       }
     },
   };
@@ -432,7 +450,6 @@ class WatchFeature {
     }
   }
 
-  // ─── Player Features ──────────────────────────────────────────────────────
 
   private async handleVideo(): Promise<void> {
     if (this.state.isDestroyed) return;
@@ -504,7 +521,6 @@ class WatchFeature {
     await player.setPlaybackQualityRange(finalQuality);
   }
 
-  // ─── Time Tracking ────────────────────────────────────────────────────────
 
   private canTrackTime(): boolean {
     return (
@@ -584,7 +600,6 @@ class WatchFeature {
     }
   }
 
-  // ─── Video Data ───────────────────────────────────────────────────────────
 
   private parseVideoPage(html: string): {
     ytInitialData: InitialData | null;
@@ -754,7 +769,6 @@ class WatchFeature {
     }
   }
 
-  // ─── UI ───────────────────────────────────────────────────────────────────
 
   private createSeparator(): HTMLElement {
     const separator = createElement("span", { textContent: "•" });

@@ -56,6 +56,7 @@ export interface Config {
   autoCaption: boolean;
   qualityService: boolean;
   quality: Quality;
+  sbEnabled: boolean;
 }
 
 export const DEFAULT_CONFIG = {
@@ -63,6 +64,7 @@ export const DEFAULT_CONFIG = {
   autoCaption: true,
   qualityService: true,
   quality: "hd1080",
+  sbEnabled: true,
 } satisfies Config;
 
 export interface State {
