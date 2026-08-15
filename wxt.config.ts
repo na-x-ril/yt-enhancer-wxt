@@ -6,7 +6,7 @@ export default defineConfig({
     name: "YT-Enhancer",
     description: "Enhance your YouTube experience",
     version: "1.0.0",
-    permissions: ["storage", "tabs", "scripting", "webRequest"],
+    permissions: ["storage"],
     host_permissions: ["*://*.youtube.com/*"],
     icons: {
       16: "icons/youtube-gear.svg",
