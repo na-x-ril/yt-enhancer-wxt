@@ -4,14 +4,8 @@ import { getVideoId } from "@/lib/core/utils";
 import { fetchSegments, clearCache, isFullyDisabled } from "./api";
 import { renderSegments, clearMarkers } from "./progress-bar";
 import { showSkipButton, hideSkipButton } from "./skip-button";
-import { STORAGE_KEY, DEFAULT_CONFIG, ALL_CATEGORIES } from "./types";
+import { STORAGE_KEY, DEFAULT_CONFIG, sanitizeSBConfig } from "./types";
 import type { Segment, SponsorBlockConfig, SBMode } from "./types";
-
-const VALID_MODES: SBMode[] = ["auto", "show_skip", "disabled"];
-
-function sanitizeMode(mode: string): SBMode {
-  return VALID_MODES.includes(mode as SBMode) ? (mode as SBMode) : "disabled";
-}
 
 export class SponsorBlockManager {
   private config: SponsorBlockConfig = { ...DEFAULT_CONFIG };
@@ -53,16 +47,7 @@ export class SponsorBlockManager {
   private async loadConfig(): Promise<void> {
     try {
       const saved = await storageBridge.get(STORAGE_KEY);
-      if (saved) {
-        this.config = { ...DEFAULT_CONFIG, ...saved };
-        if (saved.categories) {
-          const merged = { ...DEFAULT_CONFIG.categories, ...saved.categories };
-          for (const cat of ALL_CATEGORIES) {
-            merged[cat] = sanitizeMode(merged[cat]);
-          }
-          this.config.categories = merged;
-        }
-      }
+      this.config = sanitizeSBConfig(saved);
     } catch {
       console.warn("[SB] Failed to load config");
     }
@@ -111,10 +96,10 @@ export class SponsorBlockManager {
   };
 
   private checkCurrentSegment(): void {
-    if (!this.player || this.isDestroyed || isFullyDisabled(this.config))
-      return;
+    const player = this.player;
+    if (!player || this.isDestroyed || isFullyDisabled(this.config)) return;
 
-    const currentTime = this.player.getCurrentTime();
+    const currentTime = player.getCurrentTime();
     if (typeof currentTime !== "number") return;
 
     let foundIndex = -1;
@@ -141,11 +126,11 @@ export class SponsorBlockManager {
       const mode = this.config.categories[segment.category] || "disabled";
 
       if (mode === "auto") {
-        this.player!.seekTo(segment.segment[1], true);
+        player.seekTo(segment.segment[1], true);
         this.lastSegmentIndex = -1;
       } else if (mode === "show_skip") {
         const onSkip = () => {
-          this.player!.seekTo(segment.segment[1], true);
+          player.seekTo(segment.segment[1], true);
           this.lastSegmentIndex = -1;
           this.currentSkipCallback = null;
           hideSkipButton();
@@ -163,9 +148,10 @@ export class SponsorBlockManager {
   private registerListeners(): void {
     const handleSetting = (e: Event) => {
       if (this.isDestroyed) return;
-      const detail = (e as CustomEvent).detail;
+      const detail = (e as CustomEvent<{ type?: unknown; config?: unknown }>)
+        .detail;
       if (!detail || detail.type !== "sponsorblock") return;
-      this.onSBConfigChange(detail.config as SponsorBlockConfig);
+      this.onSBConfigChange(sanitizeSBConfig(detail.config));
     };
 
     window.addEventListener("yt-enhancer-sb-setting", handleSetting);

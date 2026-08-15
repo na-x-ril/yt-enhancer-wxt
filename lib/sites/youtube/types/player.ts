@@ -9,6 +9,14 @@ export interface YouTubePlayer {
   playVideo: () => void;
   pauseVideo: () => void;
 
+  getPlayerState: () => number;
+  getCurrentTime: () => number;
+  getDuration: () => number;
+  seekTo: (seconds: number, allowSeekAhead: boolean) => void;
+
+  toggleSubtitlesOn: () => void;
+  toggleSubtitles: () => void;
+
   getVideoData: () => {
     video_id: string;
     title: string;
@@ -19,14 +27,12 @@ export interface YouTubePlayer {
   getPlaylist: () => string[];
   getPlaylistIndex: () => number;
 
-  addEventListener: (event: string, listener: (...args: any[]) => void) => void;
+  addEventListener: (event: string, listener: (...args: unknown[]) => void) => void;
 
   removeEventListener: (
     event: string,
-    listener: (...args: any[]) => void,
+    listener: (...args: unknown[]) => void,
   ) => void;
-
-  [key: string]: any;
 }
 
 export const VideoState = {
@@ -59,13 +65,48 @@ export interface Config {
   sbEnabled: boolean;
 }
 
-export const DEFAULT_CONFIG = {
+export const DEFAULT_CONFIG: Config = {
   autoLoop: true,
   autoCaption: true,
   qualityService: true,
   quality: "hd1080",
   sbEnabled: true,
-} satisfies Config;
+};
+
+export const STORAGE_KEY = "dropdown_config";
+
+export function isQuality(value: unknown): value is Quality {
+  return typeof value === "string" && value in QUALITY_RANK;
+}
+
+export function normalizeSavedConfig(saved: unknown): Config {
+  if (!saved || typeof saved !== "object") return { ...DEFAULT_CONFIG };
+
+  const raw = saved as Record<string, unknown>;
+
+  const legacyQuality = raw.preferredQuality;
+  const quality = isQuality(raw.quality)
+    ? raw.quality
+    : isQuality(legacyQuality)
+      ? legacyQuality
+      : DEFAULT_CONFIG.quality;
+
+  return {
+    autoLoop:
+      typeof raw.autoLoop === "boolean" ? raw.autoLoop : DEFAULT_CONFIG.autoLoop,
+    autoCaption:
+      typeof raw.autoCaption === "boolean"
+        ? raw.autoCaption
+        : DEFAULT_CONFIG.autoCaption,
+    qualityService:
+      typeof raw.qualityService === "boolean"
+        ? raw.qualityService
+        : DEFAULT_CONFIG.qualityService,
+    quality,
+    sbEnabled:
+      typeof raw.sbEnabled === "boolean" ? raw.sbEnabled : DEFAULT_CONFIG.sbEnabled,
+  };
+}
 
 export interface State {
   id: string | null;

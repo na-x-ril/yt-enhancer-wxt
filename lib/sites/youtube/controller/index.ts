@@ -11,8 +11,10 @@ interface ActiveFeature {
 
 export class FeatureController {
   private active: ActiveFeature | null = null;
+  private generation = 0;
 
   async sync(features: Feature[]): Promise<void> {
+    const gen = ++this.generation;
     const path = location.pathname;
     const currentVideoId = getVideoId();
     const nextFeature = features.find((f) => f.match(path)) ?? null;
@@ -30,11 +32,12 @@ export class FeatureController {
       return;
     }
 
-    const cleanupOrPromise = nextFeature.init?.();
-    const cleanup =
-      cleanupOrPromise instanceof Promise
-        ? await cleanupOrPromise
-        : (cleanupOrPromise as (() => void) | undefined);
+    const cleanup = await nextFeature.init?.();
+
+    if (gen !== this.generation) {
+      cleanup?.();
+      return;
+    }
 
     this.active = {
       feature: nextFeature,
@@ -44,6 +47,7 @@ export class FeatureController {
   }
 
   destroyActive(): void {
+    this.generation++;
     this.active?.destroy?.();
     this.active = null;
   }

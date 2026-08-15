@@ -29,6 +29,8 @@ import {
   BooleanKeys,
   Config,
   DEFAULT_CONFIG,
+  isQuality,
+  normalizeSavedConfig,
   Quality,
   QUALITY_RANK,
   SettingEvent,
@@ -262,15 +264,7 @@ class WatchFeature {
   private async loadConfig(): Promise<void> {
     try {
       const saved = await storageBridge.get("dropdown_config");
-      if (saved) {
-        this.config.autoLoop = saved.autoLoop ?? true;
-        this.config.qualityService = saved.qualityService ?? true;
-        this.config.autoCaption = saved.autoCaption ?? true;
-        this.config.sbEnabled = saved.sbEnabled ?? true;
-        const pref = saved.preferredQuality;
-        this.config.quality =
-          pref != null && pref in QUALITY_RANK ? pref : "hd1080";
-      }
+      this.config = normalizeSavedConfig(saved);
     } catch (error) {
       console.warn("[WatchFeature] Failed to load config:", error);
     }
@@ -309,12 +303,13 @@ class WatchFeature {
 
     window.addEventListener("yt-enhancer-metadata-update", (event) => {
       if (this.state.isDestroyed) return;
-      const { actions } = (
+      const detail = (
         event as CustomEvent<{
-          actions: Array<UpdateViewershipAction | UpdateDateTextAction>;
+          actions?: Array<UpdateViewershipAction | UpdateDateTextAction>;
         }>
       ).detail;
-      this.handleMetadataUpdate(actions);
+      if (!detail || !Array.isArray(detail.actions)) return;
+      this.handleMetadataUpdate(detail.actions);
     });
   }
 
@@ -384,7 +379,10 @@ class WatchFeature {
   private onSetting(event: Event): void {
     if (this.state.isDestroyed) return;
     try {
-      const { setting, value } = (event as CustomEvent<SettingEvent>).detail;
+      const detail = (event as CustomEvent<SettingEvent>).detail;
+      if (!detail || typeof detail.value !== "boolean") return;
+      const { setting, value } = detail;
+      if (!(setting in DEFAULT_CONFIG)) return;
       this.config[setting] = value;
       this.settingHandlers[setting]?.(value);
     } catch (error) {
@@ -395,7 +393,9 @@ class WatchFeature {
   private onQuality(event: Event): void {
     if (this.state.isDestroyed) return;
     try {
-      const { quality: newQuality } = (event as CustomEvent).detail;
+      const detail = (event as CustomEvent<{ quality: unknown }>).detail;
+      if (!detail || !isQuality(detail.quality)) return;
+      const newQuality = detail.quality;
       this.config.quality = newQuality;
       if (this.state.player && this.config.qualityService) {
         void this.setQuality(this.state.player, newQuality);
@@ -514,7 +514,8 @@ class WatchFeature {
     quality: Quality,
   ): Promise<void> {
     if (this.state.isDestroyed || !this.config.qualityService) return;
-    const available = getAvailableQualities(this.state.playerResponse!);
+    if (!this.state.playerResponse) return;
+    const available = getAvailableQualities(this.state.playerResponse);
     const finalQuality = selectBestQuality(quality, available);
     await player.setPlaybackQualityRange(finalQuality);
   }
@@ -530,9 +531,11 @@ class WatchFeature {
 
   private async saveTime(): Promise<void> {
     if (!this.canTrackTime()) return;
+    const player = this.state.player;
+    if (!player) return;
     try {
-      const currentTime = this.state.player!.getCurrentTime();
-      const duration = this.state.player!.getDuration();
+      const currentTime = player.getCurrentTime();
+      const duration = player.getDuration();
       if (!currentTime || !duration) return;
 
       const key = `video_time_${this.state.id}`;
@@ -558,10 +561,12 @@ class WatchFeature {
 
   private async restoreTime(): Promise<void> {
     if (!this.canTrackTime()) return;
+    const player = this.state.player;
+    if (!player) return;
     try {
       const key = `video_time_${this.state.id}`;
-      const savedTime = await storageBridge.get(key);
-      const duration = this.state.player!.getDuration();
+      const savedTime = (await storageBridge.get(key)) as number | undefined;
+      const duration = player.getDuration();
       if (!savedTime || !duration) return;
 
       if (savedTime < 30 || duration - savedTime < 30) {
@@ -569,7 +574,7 @@ class WatchFeature {
         return;
       }
 
-      this.state.player!.seekTo(savedTime, true);
+      player.seekTo(savedTime, true);
       console.log("[WatchFeature] Video seeked to:", savedTime);
     } catch (error) {
       console.warn("[WatchFeature] Restore time error:", error);
@@ -581,8 +586,10 @@ class WatchFeature {
       return null;
     try {
       const onPause = () => void this.saveTime();
-      const onStateChange = (s: number) =>
-        (s === 2 || s === 0) && void this.saveTime();
+      const onStateChange = (...args: unknown[]) => {
+        const [state] = args;
+        if (state === 2 || state === 0) void this.saveTime();
+      };
 
       player.addEventListener("onPause", onPause);
       player.addEventListener("onStateChange", onStateChange);
@@ -678,7 +685,8 @@ class WatchFeature {
 
     const contents =
       data.contents.twoColumnWatchNextResults?.results.results.contents;
-    const videoPrimaryInfo = this.findVideoPrimaryInfo(contents!);
+    if (!contents) return [];
+    const videoPrimaryInfo = this.findVideoPrimaryInfo(contents);
 
     if (!videoPrimaryInfo?.videoPrimaryInfoRenderer) return [];
 
@@ -705,7 +713,8 @@ class WatchFeature {
     const contents =
       ytInitialData.contents.twoColumnWatchNextResults?.results.results
         .contents;
-    const videoPrimaryInfo = this.findVideoPrimaryInfo(contents!);
+    if (!contents) return null;
+    const videoPrimaryInfo = this.findVideoPrimaryInfo(contents);
 
     if (!videoPrimaryInfo?.videoPrimaryInfoRenderer) return null;
 
@@ -883,7 +892,7 @@ class WatchFeature {
       this.state.currentViewCount = newViewCount;
       this.state.currentDateText = dateText;
 
-      const titleElement = await waitForElement("#above-the-fold > div#title");
+      const titleElement = await waitForElement("#above-the-fold > div#title-row");
       if (this.state.isDestroyed || !titleElement) return;
 
       const { suffix, divisor, decimalPlaces } =

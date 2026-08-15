@@ -31,3 +31,5 @@ lib/sites/youtube/features/sponsorblock/test-data.ts
 
 # AI assistant instructions
 AGENTS.md
+.opencode/
+graphify-out/

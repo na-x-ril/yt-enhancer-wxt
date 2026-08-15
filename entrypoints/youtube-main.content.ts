@@ -3,7 +3,7 @@
 import { FeatureController } from "@/lib/sites/youtube/controller";
 import { FEATURES } from "@/lib/sites/youtube/features";
 import { Dropdown } from "@/lib/sites/youtube/components/dropdown";
-import { getVideoId } from "@/lib/core/utils";
+import { getVideoId, waitForElement } from "@/lib/core/utils";
 import "@/lib/sites/youtube/styles/style.scss";
 
 class YouTubeContentScript {
@@ -12,6 +12,7 @@ class YouTubeContentScript {
   private lastPath: string = location.pathname;
   private lastVideoId: string | null = getVideoId();
   private observer: MutationObserver | null = null;
+  private destroyed = false;
 
   constructor() {
     this.controller = new FeatureController();
@@ -29,17 +30,14 @@ class YouTubeContentScript {
       await this.dropdown.init();
     }
 
-    this.waitForTargetAndInject();
+    void this.waitForTargetAndInject();
   }
 
-  private waitForTargetAndInject(): void {
-    const interval = setInterval(() => {
-      const target = document.querySelector("#end");
-      if (target) {
-        clearInterval(interval);
-        this.dropdown!.inject();
-      }
-    }, 100);
+  private async waitForTargetAndInject(): Promise<void> {
+    const target = await waitForElement("#end", 15000);
+    if (target && !this.destroyed) {
+      this.dropdown?.inject();
+    }
   }
 
   private startObserver(): void {
@@ -57,7 +55,7 @@ class YouTubeContentScript {
     if (pathChanged || videoChanged) {
       this.lastPath = currentPath;
       this.lastVideoId = currentVideoId;
-      this.controller.sync(FEATURES);
+      void this.controller.sync(FEATURES);
     }
 
     if (!document.querySelector("#yt-enhancer-dropdown")) {
@@ -66,6 +64,7 @@ class YouTubeContentScript {
   }
 
   destroy(): void {
+    this.destroyed = true;
     this.observer?.disconnect();
     this.controller.destroyActive();
     this.dropdown?.destroy();

@@ -4,6 +4,7 @@
 @use "videoData" as *;
 @use "filter" as *;
 @use "sponsorblock" as *;
+@use "mixins" as *;
 
 body {
   ytd-app {
@@ -59,9 +60,10 @@ body {
           line-height: 4rem !important;
           font-weight: 600 !important;
           padding: 1rem !important;
-          background: $bg-semi-white-1;
+          // background: $bg-semi-white-1;
           border-radius: 14px !important;
           max-height: max-content !important;
+          @include highlighted;
         }
       }
 

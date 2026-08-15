@@ -24,7 +24,7 @@ export async function fetchSegments(
   config: SponsorBlockConfig,
 ): Promise<Segment[]> {
   const key = cacheKey(videoId);
-  const cached = (await storageBridge.get(key)) satisfies CachedSegments | null;
+  const cached = (await storageBridge.get(key)) as CachedSegments | undefined;
 
   if (cached && Date.now() - cached.timestamp < CACHE_DURATION_MS) {
     console.log("Key cached:", cached);

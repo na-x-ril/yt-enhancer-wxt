@@ -23,9 +23,6 @@ export const fetchData = async (url: string): Promise<string> => {
   return res.text();
 };
 
-export const delay = (ms: number): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, ms));
-
 export const getVideoId = (): string | null =>
   new URLSearchParams(new URL(location.href).search).get("v");
 
@@ -124,7 +121,7 @@ const REQUIRED_METHODS = [
   "addEventListener",
   "removeEventListener",
   "seekTo",
-] as const satisfies string[];
+] as const satisfies readonly (keyof YouTubePlayer)[];
 
 const READY_STATES = new Set([1, 2, 3]);
 

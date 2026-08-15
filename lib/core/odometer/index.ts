@@ -95,11 +95,7 @@ function parseFormat(format: string): ParsedFormat {
 
 function supportsTransitions(): boolean {
   const style = document.createElement("div").style;
-  return (
-    style.transition !== undefined ||
-    (style as CSSStyleDeclaration & Record<string, string>).transition !==
-      undefined
-  );
+  return style.transition !== undefined;
 }
 
 const TRANSITION_SUPPORT = supportsTransitions();
@@ -224,8 +220,7 @@ export class Odometer {
     this.ribbons = {};
     this.digits = [];
 
-    const wholePart =
-      !this.format.precision || !fractionalPart(renderValue) || false;
+    const wholePart = !this.format.precision || !fractionalPart(renderValue);
 
     for (const digit of String(renderValue).split("").reverse()) {
       this.addDigit(digit, digit === "." ? true : wholePart);
@@ -397,8 +392,7 @@ export class Odometer {
         if (ribbonInner) this.ribbons[i] = ribbonInner;
       }
 
-      while (this.ribbons[i].firstChild)
-        this.ribbons[i].removeChild(this.ribbons[i].firstChild!);
+      this.ribbons[i].replaceChildren();
 
       if (isCountingDown) {
         frames = [...frames].reverse();

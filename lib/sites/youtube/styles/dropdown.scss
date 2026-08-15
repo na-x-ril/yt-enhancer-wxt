@@ -1,3 +1,5 @@
+@use "mixins" as *;
+
 $dropdown-bg: rgba(0, 0, 0, 0.8);
 $dropdown-border: #343434;
 $dropdown-shadow: rgba(0, 0, 0, 0.6);
@@ -26,6 +28,7 @@ $separator-color: #404040;
 
   &-button {
     @include flex-center;
+    @include highlighted;
     background: $button-bg;
     border: none;
     cursor: pointer;
@@ -389,5 +392,70 @@ $separator-color: #404040;
       width: 12px;
       height: 12px;
     }
+  }
+}
+
+.codec-page {
+  padding: 0;
+
+  .codec-page-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0 10px;
+    border-bottom: 1px solid $separator-color;
+    margin-bottom: 8px;
+  }
+
+  .codec-back-btn {
+    @include flex-center;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    color: rgba(255, 255, 255, 0.7);
+    border-radius: 6px;
+    transition:
+      background 0.2s ease,
+      color 0.2s ease;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: $text-primary;
+    }
+
+    svg {
+      display: block;
+      width: 22px;
+      height: 22px;
+    }
+  }
+
+  .codec-page-title {
+    font-size: 2.2rem;
+    font-weight: 600;
+    color: $text-primary;
+  }
+
+  .codec-page-description {
+    font-size: 1.2rem;
+    line-height: 1.5;
+    color: rgba(255, 255, 255, 0.6);
+    padding: 0 12px 10px;
+  }
+
+  .codec-toggle-label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .codec-toggle-hint {
+    font-size: 1.1rem;
+    color: rgba(255, 255, 255, 0.45);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 }

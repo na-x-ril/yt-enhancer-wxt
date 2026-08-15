@@ -9,13 +9,9 @@ import type {
   SBMode,
   SponsorBlockCategory,
 } from "../../features/sponsorblock/types";
-import { ALL_CATEGORIES } from "../../features/sponsorblock/types";
+import { ALL_CATEGORIES, isSBMode } from "../../features/sponsorblock/types";
 
 const MODES: SBMode[] = ["auto", "show_skip", "disabled"];
-
-function isSBMode(value: string): value is SBMode {
-  return MODES.includes(value as SBMode);
-}
 
 export function createSponsorBlockPage(
   config: SponsorBlockConfig,

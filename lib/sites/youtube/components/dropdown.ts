@@ -1,32 +1,32 @@
 import { storageBridge } from "@/lib/core/bridge/bridge";
 import { buildSVG, createElement, ELEMENT_IDS } from "@/lib/core/utils";
 import { createSponsorBlockPage } from "./dropdown-pages/sponsorblock-page";
-import type { SponsorBlockConfig, SBMode } from "../features/sponsorblock/types";
-import { STORAGE_KEY as SB_STORAGE_KEY, DEFAULT_CONFIG as SB_DEFAULT_CONFIG, ALL_CATEGORIES } from "../features/sponsorblock/types";
+import { createCodecPage } from "./dropdown-pages/codec-page";
+import type { SponsorBlockConfig } from "../features/sponsorblock/types";
+import {
+  STORAGE_KEY as SB_STORAGE_KEY,
+  DEFAULT_CONFIG as SB_DEFAULT_CONFIG,
+  ALL_CATEGORIES,
+  sanitizeSBMode,
+} from "../features/sponsorblock/types";
+import type { CodecConfig } from "../features/codec/types";
+import {
+  STORAGE_KEY as CODEC_STORAGE_KEY,
+  DEFAULT_CONFIG as CODEC_DEFAULT_CONFIG,
+  sanitizeCodecConfig,
+} from "../features/codec/types";
 import type { Quality } from "../types/player";
+import {
+  DEFAULT_CONFIG,
+  normalizeSavedConfig,
+  STORAGE_KEY,
+  Config,
+  BooleanKeys,
+} from "../types/player";
 
-interface DropdownConfig {
-  autoLoop: boolean;
-  qualityService: boolean;
-  autoCaption: boolean;
-  preferredQuality: Quality;
-  sbEnabled: boolean;
-}
+type ToggleKey = BooleanKeys<Config>;
 
-type ToggleKey = keyof Omit<DropdownConfig, "preferredQuality">;
-
-const STORAGE_KEY = "dropdown_config";
-
-const DEFAULT_CONFIG = {
-  autoLoop: true,
-  qualityService: true,
-  autoCaption: true,
-  preferredQuality: "hd1080",
-  sbEnabled: true,
-} satisfies DropdownConfig;
-
-const TOGGLE_ITEMS: Array<{ id: ToggleKey; label: string }> = [
-  { id: "autoLoop", label: "Auto Loop" },
+const TOGGLE_ITEMS: Array<{ id: ToggleKey; label: string }> = [  { id: "autoLoop", label: "Auto Loop" },
   { id: "qualityService", label: "Quality Service" },
   { id: "autoCaption", label: "Auto Caption" },
   { id: "sbEnabled", label: "SponsorBlock" },
@@ -43,7 +43,9 @@ const QUALITY_OPTIONS = [
   { value: "tiny", label: "144p", description: "" },
 ] satisfies Array<{ value: Quality; label: string; description: string }>;
 
-type Page = 'main' | 'sponsorblock';
+type Page = "main" | "sponsorblock" | "codec";
+
+type CodecToggleKey = keyof CodecConfig;
 
 const TOGGLE_IDS = new Set<string>(TOGGLE_ITEMS.map((t) => t.id));
 const QUALITY_VALUES = new Set<string>(QUALITY_OPTIONS.map((q) => q.value));
@@ -52,31 +54,25 @@ function isToggleKey(value: string): value is ToggleKey {
   return TOGGLE_IDS.has(value);
 }
 
-function isQuality(value: string): value is Quality {
-  return QUALITY_VALUES.has(value);
-}
-
-const SB_VALID_MODES: SBMode[] = ["auto", "show_skip", "disabled"];
-
-function sanitizeSBMode(mode: string): SBMode {
-  return SB_VALID_MODES.includes(mode as SBMode) ? (mode as SBMode) : "disabled";
-}
-
 export class Dropdown {
   private container: HTMLElement | null = null;
   private button: HTMLElement | null = null;
   private menu: HTMLElement | null = null;
   private mainPage: HTMLElement | null = null;
   private sbPage: HTMLElement | null = null;
-  private config: DropdownConfig = { ...DEFAULT_CONFIG };
+  private codecPage: HTMLElement | null = null;
+  private config: Config = { ...DEFAULT_CONFIG };
   private sbConfig: SponsorBlockConfig = { ...SB_DEFAULT_CONFIG };
+  private codecConfig: CodecConfig = { ...CODEC_DEFAULT_CONFIG };
   private isOpen = false;
-  private currentPage: Page = 'main';
+  private currentPage: Page = "main";
   private cleanupFns: Array<() => void> = [];
 
   async init() {
     await this.loadConfig();
     await this.loadSBConfig();
+    await this.loadCodecConfig();
+    this.dispatchCodecSetting();
     this.createUI();
     this.attachListeners();
   }
@@ -84,9 +80,7 @@ export class Dropdown {
   private async loadConfig() {
     try {
       const saved = await storageBridge.get(STORAGE_KEY);
-      if (saved) {
-        this.config = { ...DEFAULT_CONFIG, ...saved };
-      }
+      this.config = normalizeSavedConfig(saved);
     } catch (error) {
       console.warn("Failed to load dropdown config:", error);
     }
@@ -94,19 +88,32 @@ export class Dropdown {
 
   private async loadSBConfig() {
     try {
-      const saved = await storageBridge.get(SB_STORAGE_KEY);
+      const saved = (await storageBridge.get(
+        SB_STORAGE_KEY,
+      )) as Record<string, unknown> | undefined;
       if (saved) {
-        this.sbConfig = { ...SB_DEFAULT_CONFIG, ...saved };
-        if (saved.categories) {
-          const merged = { ...SB_DEFAULT_CONFIG.categories, ...saved.categories };
+        const categories = saved.categories as Record<string, unknown> | undefined;
+        if (categories) {
+          const merged = { ...SB_DEFAULT_CONFIG.categories };
           for (const cat of ALL_CATEGORIES) {
-            merged[cat] = sanitizeSBMode(merged[cat]);
+            merged[cat] = sanitizeSBMode(categories[cat]);
           }
-          this.sbConfig.categories = merged;
+          this.sbConfig = { categories: merged };
+        } else {
+          this.sbConfig = { ...SB_DEFAULT_CONFIG };
         }
       }
     } catch (error) {
       console.warn("Failed to load SB config:", error);
+    }
+  }
+
+  private async loadCodecConfig() {
+    try {
+      const saved = await storageBridge.get(CODEC_STORAGE_KEY);
+      this.codecConfig = sanitizeCodecConfig(saved);
+    } catch (error) {
+      console.warn("Failed to load codec config:", error);
     }
   }
 
@@ -153,24 +160,45 @@ export class Dropdown {
     this.sbPage.appendChild(
       createSponsorBlockPage(
         this.sbConfig,
-        () => this.navigateTo('main'),
+        () => this.navigateTo("main"),
         (newConfig) => this.onSBConfigChange(newConfig),
       ),
     );
     this.menu.appendChild(this.sbPage);
+
+    this.codecPage = createElement("div", { className: "slide-page" });
+    this.codecPage.appendChild(
+      createCodecPage(
+        this.codecConfig,
+        () => this.navigateTo("main"),
+        (id, value) => this.onCodecToggle(id, value),
+      ),
+    );
+    this.menu.appendChild(this.codecPage);
   }
 
   private navigateTo(page: Page) {
     if (page === this.currentPage || !this.menu) return;
 
-    const prevEl = this.currentPage === 'main' ? this.mainPage : this.sbPage;
-    const nextEl = page === 'main' ? this.mainPage : this.sbPage;
+    const prevEl = this.getPageElement(this.currentPage);
+    const nextEl = this.getPageElement(page);
     if (!prevEl || !nextEl) return;
 
-    prevEl.classList.remove('visible');
+    prevEl.classList.remove("visible");
     this.currentPage = page;
 
-    nextEl.classList.add('visible');
+    nextEl.classList.add("visible");
+  }
+
+  private getPageElement(page: Page): HTMLElement | null {
+    switch (page) {
+      case "main":
+        return this.mainPage;
+      case "sponsorblock":
+        return this.sbPage;
+      case "codec":
+        return this.codecPage;
+    }
   }
 
   private renderMainPageContent(container: HTMLElement) {
@@ -183,6 +211,7 @@ export class Dropdown {
 
     container.appendChild(this.createQualitySelector());
     container.appendChild(this.createSBNavItem());
+    container.appendChild(this.createCodecNavItem());
   }
 
   private createHeader(): HTMLElement {
@@ -274,7 +303,7 @@ export class Dropdown {
     });
 
     const currentQuality = QUALITY_OPTIONS.find(
-      (opt) => opt.value === this.config.preferredQuality,
+      (opt) => opt.value === this.config.quality,
     );
     const badge = createElement("span", {
       id: "menu-section-badge",
@@ -298,7 +327,7 @@ export class Dropdown {
       const option = createElement("option", {
         value: value,
         textContent: description ? `${label} (${description})` : label,
-        selected: value === this.config.preferredQuality,
+        selected: value === this.config.quality,
       });
       select.appendChild(option);
     });
@@ -370,6 +399,90 @@ export class Dropdown {
     selectWrapper.appendChild(btn);
     container.append(header, selectWrapper);
     return container;
+  }
+
+  private createCodecNavItem(): HTMLElement {
+    const container = createElement("div", {
+      className: "menu-section",
+    });
+
+    const header = createElement("div", {
+      className: "menu-section-header",
+    });
+
+    const label = createElement("span", {
+      className: "menu-section-label",
+      textContent: "Codec (Force H.264)",
+    });
+
+    const badge = createElement("span", {
+      id: "codec-nav-badge",
+      className: "menu-section-badge",
+      textContent: this.getCodecBadgeText(),
+    });
+
+    header.append(label, badge);
+
+    const selectWrapper = createElement("div", {
+      className: "quality-select-wrapper",
+    });
+
+    const btn = createElement("button", {
+      className: "quality-selector",
+      ariaLabel: "Configure codec blocking",
+    });
+    btn.textContent = "Configure →";
+
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      this.navigateTo("codec");
+    };
+
+    selectWrapper.appendChild(btn);
+    container.append(header, selectWrapper);
+    return container;
+  }
+
+  private getCodecBadgeText(): string {
+    const activeCount = [
+      this.codecConfig.blockVp9,
+      this.codecConfig.blockAv1,
+      this.codecConfig.blockVp8,
+    ].filter(Boolean).length;
+    return activeCount === 0 ? "Off" : `${activeCount} on`;
+  }
+
+  private refreshCodecNavBadge() {
+    if (!this.menu) return;
+
+    const badge = this.menu.querySelector<HTMLElement>("#codec-nav-badge");
+    if (badge) badge.textContent = this.getCodecBadgeText();
+  }
+
+  private onCodecToggle(id: CodecToggleKey, value: boolean) {
+    this.onCodecConfigChange({ ...this.codecConfig, [id]: value });
+  }
+
+  private async onCodecConfigChange(newConfig: CodecConfig) {
+    this.codecConfig = newConfig;
+
+    this.refreshCodecNavBadge();
+
+    try {
+      await storageBridge.set(CODEC_STORAGE_KEY, this.codecConfig);
+    } catch (error) {
+      console.warn("Failed to save codec config:", error);
+    }
+
+    this.dispatchCodecSetting();
+  }
+
+  private dispatchCodecSetting() {
+    window.dispatchEvent(
+      new CustomEvent("yt-enhancer-codec-setting", {
+        detail: { config: this.codecConfig },
+      }),
+    );
   }
 
   private async onSBConfigChange(newConfig: SponsorBlockConfig) {
@@ -450,18 +563,19 @@ export class Dropdown {
 
     const handleChange = (e: Event) => {
       const target = e.target as HTMLSelectElement;
-      const quality = target.value;
-      if (!isQuality(quality)) return;
+      const qualityValue = target.value;
+      if (!QUALITY_VALUES.has(qualityValue)) return;
 
       const badge = this.menu?.querySelector("#menu-section-badge");
       const selectedOption = QUALITY_OPTIONS.find(
-        (opt) => opt.value === quality,
+        (opt) => opt.value === qualityValue,
       );
       if (badge && selectedOption) {
         badge.textContent = selectedOption.label;
       }
 
-      this.config.preferredQuality = quality;
+      const quality = qualityValue as Quality;
+      this.config.quality = quality;
       this.saveConfig();
       this.dispatchQualityChange(quality);
     };
@@ -530,8 +644,8 @@ export class Dropdown {
   private openMenu() {
     if (!this.menu || !this.button) return;
 
-    if (this.currentPage !== 'main') {
-      this.currentPage = 'main';
+    if (this.currentPage !== "main") {
+      this.navigateTo("main");
     }
 
     this.menu.classList.add("open");
@@ -565,7 +679,7 @@ export class Dropdown {
     );
   }
 
-  private dispatchQualityChange(quality: string) {
+  private dispatchQualityChange(quality: Quality) {
     window.dispatchEvent(
       new CustomEvent("yt-enhancer-quality", {
         detail: { quality },
@@ -590,7 +704,8 @@ export class Dropdown {
   }
 
   private injectMenu() {
-    if (!this.menu || document.querySelector("#yt-enhancer-menu")) return;
+    const menu = this.menu;
+    if (!menu || document.querySelector("#yt-enhancer-menu")) return;
 
     const waitForPopupContainer = () => {
       const popupContainer = document.querySelector<Element>(
@@ -598,7 +713,7 @@ export class Dropdown {
       );
 
       if (popupContainer) {
-        popupContainer.appendChild(this.menu!);
+        popupContainer.appendChild(menu);
       } else {
         requestAnimationFrame(waitForPopupContainer);
       }
@@ -625,10 +740,12 @@ export class Dropdown {
     this.menu = null;
     this.mainPage = null;
     this.sbPage = null;
+    this.codecPage = null;
+    this.codecConfig = { ...CODEC_DEFAULT_CONFIG };
     this.isOpen = false;
   }
 
-  getConfig(): Readonly<DropdownConfig> {
+  getConfig(): Readonly<Config> {
     return { ...this.config };
   }
 }
