@@ -27,15 +27,18 @@ Built with [WXT](https://wxt.dev) v0.20 (MV3 on both Chrome and Firefox) and [Bu
 - **Live chat auto-select** — patches `window.ytInitialData` / `window.ytAtN` at `document_start` to default live chat to "Live chat" mode instead of "Top chat"
 - **CSS ad blocking** — `display: none` on known YouTube ad selectors
 - **DVR status indicator** — shows "DVR Disabled" on non-DVR live streams
+- **Codec Blocker** — block VP9/AV1/VP8/AVC via patched `MediaSource.isTypeSupported` / `canPlayType` to force alternative codecs; per-video validation rejects configs that would leave no playable codec (requires a "Terapkan & Muat Ulang" to restart the player)
+- **Codec logging** — logs the supported video/audio codecs of the current video to the console
 
 ## Architecture
 
-Four content scripts:
+Five content scripts:
 
 | Script | World | Runs at | Role |
 |---|---|---|---|
 | `youtube-main.content.ts` | MAIN | `document_idle` | Feature orchestrator, dropdown UI, watch-page features. `allFrames: true`. |
 | `youtube-fetch-interceptor.content.ts` | MAIN | `document_start` | Patches `window.fetch` to forward `/youtubei/v1/updated_metadata` as custom events. |
+| `youtube-codec-patch.content.ts` | MAIN | `document_start` | Patches `MediaSource.isTypeSupported` / `canPlayType` to block configured codecs. `allFrames: true`. |
 | `youtube-livechat-patch.content.ts` | MAIN | `document_start` | Intercepts `ytInitialData` / `ytAtN` via `Object.defineProperty`; swaps chat mode from Top chat → Live chat. `allFrames: true`. |
 | `youtube-bridge.content.ts` | ISOLATED | `document_start` | `postMessage` bridge between MAIN world and `browser.storage`. |
 

@@ -4,6 +4,7 @@ export interface CodecConfig {
   blockVp9: boolean;
   blockAv1: boolean;
   blockVp8: boolean;
+  blockAvc: boolean;
 }
 
 export const STORAGE_KEY = "codec_config";
@@ -12,9 +13,10 @@ export const DEFAULT_CONFIG: CodecConfig = {
   blockVp9: false,
   blockAv1: false,
   blockVp8: false,
+  blockAvc: false,
 };
 
-const BOOLEAN_KEYS = ["blockVp9", "blockAv1", "blockVp8"] as const;
+const BOOLEAN_KEYS = ["blockVp9", "blockAv1", "blockVp8", "blockAvc"] as const;
 
 export function sanitizeCodecConfig(input: unknown): CodecConfig {
   if (!input || typeof input !== "object") return { ...DEFAULT_CONFIG };

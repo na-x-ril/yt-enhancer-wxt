@@ -444,6 +444,39 @@ $separator-color: #404040;
     padding: 0 12px 10px;
   }
 
+  .codec-page-warning {
+    font-size: 1.1rem;
+    line-height: 1.4;
+    color: rgba(255, 82, 82, 0.9);
+    padding: 0 12px 10px;
+  }
+
+  .codec-apply-btn {
+    display: block;
+    width: calc(100% - 24px);
+    margin: 4px 8px 8px;
+    padding: 12px;
+    border: none;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.12);
+    color: $text-primary;
+    font-size: 1.4rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition:
+      background 0.2s ease,
+      opacity 0.2s ease;
+
+    &:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    &:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+  }
+
   .codec-toggle-label {
     display: flex;
     flex-direction: column;
@@ -452,7 +485,7 @@ $separator-color: #404040;
   }
 
   .codec-toggle-hint {
-    font-size: 1.1rem;
+    font-size: 1.2rem;
     color: rgba(255, 255, 255, 0.45);
     white-space: nowrap;
     overflow: hidden;

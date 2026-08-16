@@ -52,6 +52,28 @@ const getAvailableQualities = (response: InitialPlayerResponse): Quality[] => {
   return Array.from(qualities);
 };
 
+const getAvailableCodecs = (
+  response: InitialPlayerResponse,
+): { video: string[]; audio: string[] } => {
+  const formats = [
+    ...(response.streamingData?.formats ?? []),
+    ...(response.streamingData?.adaptiveFormats ?? []),
+  ];
+  const video = new Set<string>();
+  const audio = new Set<string>();
+  for (const fmt of formats) {
+    const match = fmt.mimeType.match(/codecs="([^"]+)"/);
+    if (!match) continue;
+    const codecs = match[1].split(",").map((c) => c.trim());
+    if (fmt.mimeType.startsWith("audio/")) {
+      codecs.forEach((c) => audio.add(c));
+    } else {
+      codecs.forEach((c, i) => (i === 0 ? video : audio).add(c));
+    }
+  }
+  return { video: Array.from(video).sort(), audio: Array.from(audio).sort() };
+};
+
 const selectBestQuality = (
   preferred: Quality,
   available: Quality[],
@@ -277,11 +299,13 @@ class WatchFeature {
     const handleRefresh = () => void this.onRefresh();
     const handleSetting = (e: Event) => this.onSetting(e);
     const handleQuality = (e: Event) => this.onQuality(e);
+    const handleCodecReload = () => void this.reloadForCodecChange();
 
     window.addEventListener("beforeunload", handleBeforeUnload);
     window.addEventListener("yt-enhancer-refresh", handleRefresh);
     window.addEventListener("yt-enhancer-setting", handleSetting);
     window.addEventListener("yt-enhancer-quality", handleQuality);
+    window.addEventListener("yt-enhancer-codec-reload", handleCodecReload);
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     this.cleanupHandlers.push(
@@ -289,6 +313,8 @@ class WatchFeature {
       () => window.removeEventListener("yt-enhancer-refresh", handleRefresh),
       () => window.removeEventListener("yt-enhancer-setting", handleSetting),
       () => window.removeEventListener("yt-enhancer-quality", handleQuality),
+      () =>
+        window.removeEventListener("yt-enhancer-codec-reload", handleCodecReload),
       () =>
         document.removeEventListener(
           "visibilitychange",
@@ -311,6 +337,24 @@ class WatchFeature {
       if (!detail || !Array.isArray(detail.actions)) return;
       this.handleMetadataUpdate(detail.actions);
     });
+  }
+
+  private async reloadForCodecChange(): Promise<void> {
+    if (this.state.isDestroyed) return;
+    if (!this.state.id) return;
+    if (!this.state.player) {
+      location.reload();
+      return;
+    }
+    try {
+      const player = this.state.player;
+      player.loadVideoById(this.state.id);
+      await this.restoreTime();
+      await this.applyPlayerFeatures(player);
+    } catch (error) {
+      console.warn("[WatchFeature] Codec reload error:", error);
+      location.reload();
+    }
   }
 
   private async onRefresh(): Promise<void> {
@@ -740,6 +784,15 @@ class WatchFeature {
       const ytInitialPlayerResponseObj = data.ytInitialPlayerResponse;
 
       this.state.playerResponse = ytInitialPlayerResponseObj;
+
+      const { video, audio } = getAvailableCodecs(ytInitialPlayerResponseObj);
+      console.log("[WatchFeature] Supported video codecs:", video);
+      console.log("[WatchFeature] Supported audio codecs:", audio);
+      window.dispatchEvent(
+        new CustomEvent("yt-enhancer-codecs-updated", {
+          detail: { video, audio },
+        }),
+      );
 
       this.setVideoState(
         ytInitialPlayerResponseObj.microformat.playerMicroformatRenderer,

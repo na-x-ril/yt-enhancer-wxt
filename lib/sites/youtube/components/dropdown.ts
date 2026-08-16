@@ -15,6 +15,10 @@ import {
   DEFAULT_CONFIG as CODEC_DEFAULT_CONFIG,
   sanitizeCodecConfig,
 } from "../features/codec/types";
+import {
+  getRemainingCodecs,
+  probeCodecSupport,
+} from "../features/codec";
 import type { Quality } from "../types/player";
 import {
   DEFAULT_CONFIG,
@@ -64,6 +68,9 @@ export class Dropdown {
   private config: Config = { ...DEFAULT_CONFIG };
   private sbConfig: SponsorBlockConfig = { ...SB_DEFAULT_CONFIG };
   private codecConfig: CodecConfig = { ...CODEC_DEFAULT_CONFIG };
+  private currentVideoCodecs: { video: string[]; audio: string[] } | null =
+    null;
+  private codecConfigDirty = false;
   private isOpen = false;
   private currentPage: Page = "main";
   private cleanupFns: Array<() => void> = [];
@@ -172,6 +179,7 @@ export class Dropdown {
         this.codecConfig,
         () => this.navigateTo("main"),
         (id, value) => this.onCodecToggle(id, value),
+        () => this.onCodecApply(),
       ),
     );
     this.menu.appendChild(this.codecPage);
@@ -412,7 +420,7 @@ export class Dropdown {
 
     const label = createElement("span", {
       className: "menu-section-label",
-      textContent: "Codec (Force H.264)",
+      textContent: "Codec Blocker",
     });
 
     const badge = createElement("span", {
@@ -448,6 +456,7 @@ export class Dropdown {
       this.codecConfig.blockVp9,
       this.codecConfig.blockAv1,
       this.codecConfig.blockVp8,
+      this.codecConfig.blockAvc,
     ].filter(Boolean).length;
     return activeCount === 0 ? "Off" : `${activeCount} on`;
   }
@@ -459,14 +468,88 @@ export class Dropdown {
     if (badge) badge.textContent = this.getCodecBadgeText();
   }
 
-  private onCodecToggle(id: CodecToggleKey, value: boolean) {
-    this.onCodecConfigChange({ ...this.codecConfig, [id]: value });
+  private onCodecToggle(id: CodecToggleKey, value: boolean): boolean {
+    const newConfig = { ...this.codecConfig, [id]: value };
+    if (!this.canApplyCodecConfig(newConfig)) return false;
+    this.onCodecConfigChange(newConfig);
+    return true;
+  }
+
+  private canApplyCodecConfig(newConfig: CodecConfig): boolean {
+    const snapshot = this.currentVideoCodecs;
+    if (!snapshot || snapshot.video.length === 0) return true;
+
+    const remaining = getRemainingCodecs(snapshot.video, newConfig);
+    if (remaining.length > 0 && remaining.some(probeCodecSupport)) return true;
+
+    this.showCodecWarning(remaining.length === 0);
+    return false;
+  }
+
+  private showCodecWarning(allBlocked: boolean): void {
+    const warning =
+      this.menu?.querySelector<HTMLElement>("#codec-page-warning");
+    if (!warning) return;
+    warning.textContent = allBlocked
+      ? "Semua codec video ini akan diblokir — blokir dibatalkan."
+      : "Codec tersisa untuk video ini tidak didukung browser — blokir dibatalkan.";
+    warning.hidden = false;
+  }
+
+  private hideCodecWarning(): void {
+    const warning =
+      this.menu?.querySelector<HTMLElement>("#codec-page-warning");
+    if (warning) warning.hidden = true;
+  }
+
+  private refreshCodecApplyBtn(): void {
+    const btn =
+      this.menu?.querySelector<HTMLButtonElement>("#codec-apply-btn");
+    if (btn) btn.disabled = !this.codecConfigDirty;
+  }
+
+  private onCodecApply(): void {
+    if (!this.codecConfigDirty) return;
+    this.codecConfigDirty = false;
+    this.refreshCodecApplyBtn();
+    this.hideCodecWarning();
+    window.dispatchEvent(new CustomEvent("yt-enhancer-codec-reload"));
+  }
+
+  private attachCodecSnapshotListener(): void {
+    const handleCodecsUpdated = (e: Event) => {
+      const detail = (
+        e as CustomEvent<{ video?: unknown; audio?: unknown }>
+      ).detail;
+      if (
+        !detail ||
+        !Array.isArray(detail.video) ||
+        !Array.isArray(detail.audio)
+      ) {
+        return;
+      }
+      this.currentVideoCodecs = {
+        video: detail.video.filter((c): c is string => typeof c === "string"),
+        audio: detail.audio.filter((c): c is string => typeof c === "string"),
+      };
+      this.hideCodecWarning();
+    };
+
+    window.addEventListener("yt-enhancer-codecs-updated", handleCodecsUpdated);
+    this.cleanupFns.push(() =>
+      window.removeEventListener(
+        "yt-enhancer-codecs-updated",
+        handleCodecsUpdated,
+      ),
+    );
   }
 
   private async onCodecConfigChange(newConfig: CodecConfig) {
     this.codecConfig = newConfig;
 
     this.refreshCodecNavBadge();
+    this.codecConfigDirty = true;
+    this.refreshCodecApplyBtn();
 
     try {
       await storageBridge.set(CODEC_STORAGE_KEY, this.codecConfig);
@@ -520,6 +603,7 @@ export class Dropdown {
     this.attachMenuListener();
     this.attachQualityListener();
     this.attachDocumentListeners();
+    this.attachCodecSnapshotListener();
   }
 
   private attachButtonListener() {
@@ -742,6 +826,8 @@ export class Dropdown {
     this.sbPage = null;
     this.codecPage = null;
     this.codecConfig = { ...CODEC_DEFAULT_CONFIG };
+    this.currentVideoCodecs = null;
+    this.codecConfigDirty = false;
     this.isOpen = false;
   }
 

@@ -8,12 +8,14 @@ const TOGGLE_ITEMS: Array<{ id: CodecToggleKey; label: string; hint: string }> =
     { id: "blockVp9", label: "Blokir VP9", hint: "video/webm; codecs=\"vp9\"" },
     { id: "blockAv1", label: "Blokir AV1", hint: "video/mp4; codecs=\"av01...\"" },
     { id: "blockVp8", label: "Blokir VP8", hint: "video/webm; codecs=\"vp8\"" },
+    { id: "blockAvc", label: "Blokir AVC", hint: "video/mp4; codecs=\"avc1...\"" },
   ];
 
 export function createCodecPage(
   config: CodecConfig,
   onBack: () => void,
-  onToggle: (id: CodecToggleKey, value: boolean) => void,
+  onToggle: (id: CodecToggleKey, value: boolean) => boolean,
+  onApply: () => void,
 ): HTMLElement {
   const page = createElement("div", { className: "codec-page" });
 
@@ -38,7 +40,7 @@ export function createCodecPage(
 
   const title = createElement("span", {
     className: "codec-page-title",
-    textContent: "Force H.264",
+    textContent: "Codec Blocker",
   });
 
   header.append(backBtn, title);
@@ -47,13 +49,32 @@ export function createCodecPage(
   const description = createElement("div", {
     className: "codec-page-description",
     textContent:
-      "Paksa YouTube mengirim video H.264 dengan memblokir codec yang tidak didukung komputer Anda.",
+      "Blokir codec tertentu untuk memaksa YouTube mengirim format lain yang didukung komputer Anda.",
   });
   page.appendChild(description);
+
+  const warning = createElement("div", {
+    id: "codec-page-warning",
+    className: "codec-page-warning",
+    hidden: true,
+  });
+  page.appendChild(warning);
 
   for (const item of TOGGLE_ITEMS) {
     page.appendChild(createToggleRow(config, item, onToggle));
   }
+
+  const applyBtn = createElement("button", {
+    id: "codec-apply-btn",
+    className: "codec-apply-btn",
+    textContent: "Terapkan & Muat Ulang",
+    disabled: true,
+  });
+  applyBtn.onclick = (e) => {
+    e.stopPropagation();
+    onApply();
+  };
+  page.appendChild(applyBtn);
 
   return page;
 }
@@ -61,7 +82,7 @@ export function createCodecPage(
 function createToggleRow(
   config: CodecConfig,
   item: { id: CodecToggleKey; label: string; hint: string },
-  onToggle: (id: CodecToggleKey, value: boolean) => void,
+  onToggle: (id: CodecToggleKey, value: boolean) => boolean,
 ): HTMLElement {
   const row = createElement("div", {
     className: "toggle-item",
@@ -106,7 +127,15 @@ function createToggleRow(
     }
     row.setAttribute("aria-checked", String(newValue));
 
-    onToggle(item.id, newValue);
+    const accepted = onToggle(item.id, newValue);
+    if (!accepted) {
+      if (newValue) {
+        toggleSwitch.classList.remove("active");
+      } else {
+        toggleSwitch.classList.add("active");
+      }
+      row.setAttribute("aria-checked", String(!newValue));
+    }
   };
 
   return row;

@@ -8,6 +8,7 @@ export interface YouTubePlayer {
   setPlaybackQualityRange: (resolution: string) => Promise<void>;
   playVideo: () => void;
   pauseVideo: () => void;
+  loadVideoById: (videoId: string) => void;
 
   getPlayerState: () => number;
   getCurrentTime: () => number;
