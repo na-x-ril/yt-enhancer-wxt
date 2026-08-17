@@ -8,6 +8,7 @@ export const ELEMENT_IDS = {
   viewSuffix: "yt-enhancer-view-suffix",
   dateText: "yt-enhancer-date-text",
   dvrIndicator: "yt-enhancer-dvr-indicator",
+  reEdgeButton: "yt-enhancer-re-edge-btn",
   refreshBtn: "yt-enhancer-refresh-btn",
   dropdown: "yt-enhancer-dropdown",
   dropdownButton: "yt-enhancer-dropdown-button",

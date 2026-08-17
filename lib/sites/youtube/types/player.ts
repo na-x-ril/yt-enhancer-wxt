@@ -120,6 +120,9 @@ export interface State {
   lastSavedTime: number;
   isDestroyed: boolean;
   isCaptionActive: boolean;
+  reEdgeActive: boolean;
+  reEdgeBufferingStart: number | null;
+  reEdgeTimeout: number | null;
 }
 
 export type BooleanKeys<T> = {

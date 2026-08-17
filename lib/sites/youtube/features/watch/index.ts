@@ -38,6 +38,10 @@ import {
   VideoState,
 } from "../../types/player";
 
+const RE_EDGE_SPEED = 2;
+const RE_EDGE_TIMEOUT_MS = 60000;
+const RE_EDGE_CLAMP_OFFSET = 1;
+
 const getAvailableQualities = (response: InitialPlayerResponse): Quality[] => {
   const formats = [
     ...(response.streamingData?.formats ?? []),
@@ -215,6 +219,9 @@ class WatchFeature {
       lastSavedTime: 0,
       isDestroyed: false,
       isCaptionActive: false,
+      reEdgeActive: false,
+      reEdgeBufferingStart: null,
+      reEdgeTimeout: null,
     };
   }
 
@@ -261,6 +268,8 @@ class WatchFeature {
     this.timeTrackingCleanup?.();
     this.timeTrackingCleanup = null;
 
+    this.abortReEdge();
+
     this.odometer?.destroy();
     this.odometer = null;
 
@@ -278,6 +287,7 @@ class WatchFeature {
 
     document.getElementById(ELEMENT_IDS.videoInfo)?.remove();
     document.getElementById(ELEMENT_IDS.dvrIndicator)?.remove();
+    document.getElementById(ELEMENT_IDS.reEdgeButton)?.remove();
 
     this.state = this.createInitialState();
     this.metadataListenerAttached = false;
@@ -625,6 +635,130 @@ class WatchFeature {
     }
   }
 
+  private getLiveEdge(): number | null {
+    const video = document.querySelector<HTMLVideoElement>(
+      "video.html5-main-video",
+    );
+    if (!video || video.seekable.length === 0) return null;
+    return video.seekable.end(video.seekable.length - 1);
+  }
+
+  private reEdgeListener: ((...args: unknown[]) => void) | null = null;
+
+  private reEdge(): void {
+    if (this.state.isDestroyed || this.state.state !== VideoState.LIVE) return;
+    if (this.state.reEdgeActive) return;
+    if (!this.state.player) return;
+    const video = document.querySelector<HTMLVideoElement>(
+      "video.html5-main-video",
+    );
+    if (!video) return;
+
+    const isDVR =
+      this.state.playerResponse?.videoDetails.isLiveDvrEnabled === true;
+    this.state.reEdgeActive = true;
+    this.state.reEdgeBufferingStart = null;
+    video.playbackRate = RE_EDGE_SPEED;
+    this.setReEdgeButtonState(true);
+
+    const edge = this.getLiveEdge();
+    const delay = edge !== null ? edge - video.currentTime : null;
+    console.log("[WatchFeature] Re-edge started:", {
+      isDVR,
+      delay: delay !== null ? `${delay.toFixed(1)}s` : "unknown",
+      playbackRate: RE_EDGE_SPEED,
+    });
+
+    const onStateChange = (...args: unknown[]) => {
+      if (!this.state.reEdgeActive) return;
+      const [state] = args;
+      if (state === 3) {
+        this.state.reEdgeBufferingStart = Date.now();
+        console.log("[WatchFeature] Re-edge buffering started");
+      } else if (state === 1 && this.state.reEdgeBufferingStart !== null) {
+        const bufferingMs = Date.now() - this.state.reEdgeBufferingStart;
+        this.finishReEdge(isDVR, bufferingMs);
+      } else if (state === 2) {
+        console.log("[WatchFeature] Re-edge aborted (paused)");
+        this.finishReEdge(isDVR, 0);
+      }
+    };
+
+    this.reEdgeListener = onStateChange;
+    this.state.player.addEventListener("onStateChange", onStateChange);
+    this.state.reEdgeTimeout = window.setTimeout(() => {
+      console.log("[WatchFeature] Re-edge aborted (timeout)");
+      this.finishReEdge(isDVR, 0);
+    }, RE_EDGE_TIMEOUT_MS);
+  }
+
+  private finishReEdge(isDVR: boolean, bufferingMs: number): void {
+    if (!this.state.reEdgeActive) return;
+
+    if (this.state.reEdgeTimeout !== null) {
+      window.clearTimeout(this.state.reEdgeTimeout);
+      this.state.reEdgeTimeout = null;
+    }
+
+    if (this.state.player && this.reEdgeListener) {
+      this.state.player.removeEventListener("onStateChange", this.reEdgeListener);
+    }
+    this.reEdgeListener = null;
+
+    if (isDVR && bufferingMs > 0) {
+      const player = this.state.player;
+      const video = document.querySelector<HTMLVideoElement>(
+        "video.html5-main-video",
+      );
+      if (player && video) {
+        try {
+          const edge = this.getLiveEdge();
+          const target = Math.min(
+            player.getCurrentTime() + bufferingMs / 1000,
+            (edge ?? Number.MAX_SAFE_INTEGER) - RE_EDGE_CLAMP_OFFSET,
+          );
+          player.seekTo(target, true);
+          console.log(
+            "[WatchFeature] Re-edge seek to:",
+            `${target.toFixed(2)}s`,
+            `(buffering: ${(bufferingMs / 1000).toFixed(2)}s)`,
+          );
+        } catch (error) {
+          console.warn("[WatchFeature] Re-edge seek error:", error);
+        }
+      }
+    } else if (isDVR) {
+      console.log("[WatchFeature] Re-edge finished without seek (0ms buffering)");
+    } else {
+      console.log(
+        "[WatchFeature] Re-edge finished (non-DVR, waiting for YT rate reset)",
+      );
+    }
+
+    const video = document.querySelector<HTMLVideoElement>(
+      "video.html5-main-video",
+    );
+    if (video) video.playbackRate = 1;
+
+    this.state.reEdgeActive = false;
+    this.state.reEdgeBufferingStart = null;
+    this.setReEdgeButtonState(false);
+  }
+
+  private abortReEdge(): void {
+    if (!this.state.reEdgeActive) return;
+    console.log("[WatchFeature] Re-edge aborted (destroy)");
+    this.finishReEdge(
+      this.state.playerResponse?.videoDetails.isLiveDvrEnabled === true,
+      0,
+    );
+  }
+
+  private setReEdgeButtonState(active: boolean): void {
+    const button = document.getElementById(ELEMENT_IDS.reEdgeButton);
+    if (button) button.classList.toggle("active", active);
+  }
+
   private setupTimeTracking(player: YouTubePlayer): (() => void) | null {
     if (this.state.isDestroyed || this.state.state === VideoState.LIVE)
       return null;
@@ -825,6 +959,7 @@ class WatchFeature {
         console.log("[WatchFeature] Is live DVR enabled:", isDVREnabled);
         await waitForElement("div.ytp-time-wrapper", 5000);
         if (!this.state.isDestroyed) this.displayDVRIndicator(isDVREnabled);
+        if (!this.state.isDestroyed) this.displayReEdgeButton();
       }
     } catch (error) {
       console.warn("[WatchFeature] Fetch video data error:", error);
@@ -1078,6 +1213,39 @@ class WatchFeature {
       timeWrapper.appendChild(indicator);
     } catch (error) {
       console.warn("[WatchFeature] Display DVR indicator error:", error);
+    }
+  }
+
+  private displayReEdgeButton(): void {
+    if (this.state.isDestroyed) return;
+    try {
+      document.getElementById(ELEMENT_IDS.reEdgeButton)?.remove();
+
+      if (this.state.state !== VideoState.LIVE) return;
+
+      const timeWrapper = document.querySelector<HTMLElement>(
+        "div.ytp-time-wrapper",
+      );
+      if (!timeWrapper) return;
+
+      const button = createElement("button", {
+        id: ELEMENT_IDS.reEdgeButton,
+        title: "Re-Edge",
+        ariaLabel: "Re-Edge",
+      });
+      button.appendChild(
+        buildSVG("0 0 24 24", [
+          {
+            d: "M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z",
+            attrs: { fill: "currentColor" },
+          },
+        ]),
+      );
+
+      button.onclick = () => this.reEdge();
+      timeWrapper.appendChild(button);
+    } catch (error) {
+      console.warn("[WatchFeature] Display re-edge button error:", error);
     }
   }
 }
