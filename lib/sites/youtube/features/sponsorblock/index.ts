@@ -179,13 +179,6 @@ export class SponsorBlockManager {
     });
   }
 
-  async refreshCache(): Promise<void> {
-    if (this.videoId) {
-      await clearCache(this.videoId);
-      await this.fetchAndRender();
-    }
-  }
-
   destroy(): void {
     this.isDestroyed = true;
     this.stopTimeCheck();
