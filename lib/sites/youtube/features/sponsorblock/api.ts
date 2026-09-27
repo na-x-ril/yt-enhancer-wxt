@@ -27,7 +27,6 @@ export async function fetchSegments(
   const cached = (await storageBridge.get(key)) as CachedSegments | undefined;
 
   if (cached && Date.now() - cached.timestamp < CACHE_DURATION_MS) {
-    console.log("Key cached:", cached);
     return cached.segments;
   }
 

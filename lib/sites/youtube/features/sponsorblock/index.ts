@@ -51,7 +51,13 @@ export class SponsorBlockManager {
     // Segment cache is keyed per video only, so a config change that
     // (de)activates categories must invalidate it. Otherwise a newly
     // enabled category stays missing until the cache expires.
-    await clearCache(this.videoId);
+    // A failed invalidation must not block the update: worst case the
+    // fresh fetch below serves stale segments until the next change.
+    try {
+      await clearCache(this.videoId);
+    } catch (error) {
+      console.warn("[SB] Failed to invalidate segment cache:", error);
+    }
     await this.fetchAndRender();
   }
 
