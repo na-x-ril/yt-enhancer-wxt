@@ -26,11 +26,10 @@ jobs:
       - run: bun run zip
       - run: bun run zip:firefox
 
-      - name: List zip outputs
-        run: ls -la .output/ && ls -la .output/*.zip
-
       - uses: actions/upload-artifact@v4
         with:
           name: extension-zips
+          # .output/ is a dot-directory, excluded as "hidden" unless opted in
+          include-hidden-files: true
           path: .output/*.zip
           retention-days: 14
