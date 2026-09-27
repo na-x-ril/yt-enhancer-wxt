@@ -7,7 +7,7 @@ Built with [WXT](https://wxt.dev) v0.20 (MV3 on both Chrome and Firefox) and [Bu
 ## Commands
 
 | Command | Description |
-|---|---|---|
+|---|---|
 | `bun install` | Install dependencies + `wxt prepare` (auto-generates `.wxt/`) |
 | `bun dev` | Dev server (Chrome) |
 | `bun dev:firefox` | Dev server (Firefox) |
