@@ -33,14 +33,25 @@ export class SponsorBlockManager {
     this.config = newConfig;
     if (this.isDestroyed || !this.videoId) return;
 
+    // Reset per-segment tracking so the current playback position is
+    // re-evaluated under the new mode on the next tick. Without this,
+    // switching mode while inside a segment (e.g. show_skip -> auto)
+    // is ignored because checkCurrentSegment only reacts to transitions.
+    this.lastSegmentIndex = -1;
+    this.currentSkipCallback = null;
+    hideSkipButton();
+
     if (isFullyDisabled(this.config)) {
       this.stopTimeCheck();
       clearMarkers();
-      hideSkipButton();
       this.segments = [];
       return;
     }
 
+    // Segment cache is keyed per video only, so a config change that
+    // (de)activates categories must invalidate it. Otherwise a newly
+    // enabled category stays missing until the cache expires.
+    await clearCache(this.videoId);
     await this.fetchAndRender();
   }
 
