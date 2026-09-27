@@ -4,8 +4,6 @@ import { defineConfig } from "wxt";
 export default defineConfig({
   manifest: ({ browser }) => ({
     name: "YT-Enhancer",
-    description: "Enhance your YouTube experience",
-    version: "1.0.0",
     permissions: ["storage"],
     host_permissions: ["*://*.youtube.com/*"],
     icons: {
