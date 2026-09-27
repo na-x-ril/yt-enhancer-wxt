@@ -17,6 +17,22 @@ Built with [WXT](https://wxt.dev) v0.20 (MV3 on both Chrome and Firefox) and [Bu
 | `bun zip:firefox` | Package `.zip` (Firefox) |
 | `bun compile` | TypeScript type-check (`tsc --noEmit`) |
 
+## Versioning & releases
+
+Manual SemVer, single source of truth in `package.json` (`version`).
+WXT reads it automatically into the extension manifest — never hardcode
+`version` in `wxt.config.ts`.
+
+Release flow:
+
+1. Bump `version` in `package.json` (e.g. `1.0.0` → `1.1.0`).
+2. Commit, then tag: `git tag v1.1.0 && git push origin main --tags`.
+3. The `Release` workflow checks the tag matches `package.json`,
+   builds + zips Chrome & Firefox, and publishes a GitHub Release
+   with the `.zip` files attached.
+
+CI runs `compile` + Chrome/Firefox `build` + `zip` on every push/PR to `main`.
+
 ## Features
 
 - **Real-time view count** — animated odometer on the watch page, updates via intercepted metadata API
