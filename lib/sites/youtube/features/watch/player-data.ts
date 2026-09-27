@@ -88,7 +88,11 @@ export function getAvailableCodecs(response: InitialPlayerResponse): {
   for (const fmt of formats) {
     const match = fmt.mimeType.match(/codecs="([^"]+)"/);
     if (!match) continue;
-    const codecs = match[1].split(",").map((c) => c.trim());
+    // Unreachable when match succeeds (group is required), but guarded
+    // for noUncheckedIndexedAccess without `!` assertions.
+    const codecsStr = match[1];
+    if (!codecsStr) continue;
+    const codecs = codecsStr.split(",").map((c) => c.trim());
     if (fmt.mimeType.startsWith("audio/")) {
       codecs.forEach((c) => audio.add(c));
     } else {
@@ -109,11 +113,17 @@ export function selectBestQuality(
     .map((q) => ({ quality: q, rank: QUALITY_RANK[q] ?? 0 }))
     .sort((a, b) => a.rank - b.rank);
 
-  const minRank = sorted[0].rank;
-  const maxRank = sorted[sorted.length - 1].rank;
+  const lowest = sorted[0];
+  const highest = sorted[sorted.length - 1];
+  // Unreachable: `available` is non-empty so `sorted` is too. The fallback
+  // only satisfies noUncheckedIndexedAccess without `!` assertions.
+  if (!lowest || !highest) return preferred;
 
-  if (preferredRank >= maxRank) return sorted[sorted.length - 1].quality;
-  if (preferredRank <= minRank) return sorted[0].quality;
+  const minRank = lowest.rank;
+  const maxRank = highest.rank;
+
+  if (preferredRank >= maxRank) return highest.quality;
+  if (preferredRank <= minRank) return lowest.quality;
 
   const exact = sorted.find((item) => item.rank === preferredRank);
   if (exact) return exact.quality;

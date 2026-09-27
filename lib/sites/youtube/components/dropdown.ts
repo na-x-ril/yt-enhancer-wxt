@@ -23,12 +23,11 @@ import {
   loadFeatureConfig,
   saveFeatureConfig,
 } from "../features/config-store";
+import type { BooleanKeys, Config } from "../types/player";
 import {
   DEFAULT_CONFIG,
   normalizeSavedConfig,
   STORAGE_KEY,
-  Config,
-  BooleanKeys,
 } from "../types/player";
 
 type ToggleKey = BooleanKeys<Config>;

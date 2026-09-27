@@ -337,7 +337,7 @@ export class Odometer {
     return Math.max(
       ...values.map((val) => {
         const parts = parser.exec(String(val));
-        return parts ? parts[1].length : 0;
+        return parts ? (parts[1] ?? "").length : 0;
       }),
     );
   }
@@ -406,19 +406,24 @@ export class Odometer {
 
     for (let i = 0; i < reversedFrames.length; i++) {
       let frames = reversedFrames[i];
+      if (!frames) continue;
 
       if (!this.digits[i]) {
         this.addDigit(" ", i >= fractionalCount);
       }
+      const digit = this.digits[i];
+      if (!digit) continue;
 
       if (!this.ribbons[i]) {
-        const ribbonInner = this.digits[i].querySelector<HTMLElement>(
+        const ribbonInner = digit.querySelector<HTMLElement>(
           ".odometer-ribbon-inner",
         );
         if (ribbonInner) this.ribbons[i] = ribbonInner;
       }
+      const ribbon = this.ribbons[i];
+      if (!ribbon) continue;
 
-      this.ribbons[i].replaceChildren();
+      ribbon.replaceChildren();
 
       if (isCountingDown) {
         frames = [...frames].reverse();
@@ -430,7 +435,7 @@ export class Odometer {
         numEl.textContent = String(frames[j]);
         if (j === frames.length - 1) numEl.classList.add("odometer-last-value");
         if (j === 0) numEl.classList.add("odometer-first-value");
-        this.ribbons[i].appendChild(numEl);
+        ribbon.appendChild(numEl);
       }
     }
 
@@ -458,7 +463,7 @@ export class Odometer {
     } else if (!this.inside.children.length) {
       this.inside.appendChild(digit);
     } else {
-      this.inside.insertBefore(digit, this.inside.children[0]);
+      this.inside.insertBefore(digit, this.inside.children[0] ?? null);
     }
   }
 
@@ -497,7 +502,7 @@ export class Odometer {
           resetted = true;
         }
 
-        const chr = this.format.repeating[this.format.repeating.length - 1];
+        const chr = this.format.repeating[this.format.repeating.length - 1] ?? "";
         this.format.repeating = this.format.repeating.slice(0, -1);
 
         if (chr === "d") break;

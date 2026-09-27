@@ -22,15 +22,17 @@ import {
 } from "@/lib/core/utils";
 import { SponsorBlockManager } from "../sponsorblock";
 import { loadFeatureConfig } from "../config-store";
-import {
+import type {
   BooleanKeys,
   Config,
-  DEFAULT_CONFIG,
-  isQuality,
-  normalizeSavedConfig,
   Quality,
   SettingEvent,
   State,
+} from "../../types/player";
+import {
+  DEFAULT_CONFIG,
+  isQuality,
+  normalizeSavedConfig,
   VideoState,
 } from "../../types/player";
 import {

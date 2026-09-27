@@ -1,6 +1,6 @@
 // lib/sites/youtube/types/player.ts
 
-import { InitialPlayerResponse } from "./VideoData";
+import type { InitialPlayerResponse } from "./VideoData";
 
 export interface YouTubePlayer {
   setLoop: (loop: boolean) => void;

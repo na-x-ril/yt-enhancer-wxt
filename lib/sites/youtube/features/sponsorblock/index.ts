@@ -121,6 +121,7 @@ export class SponsorBlockManager {
     let foundIndex = -1;
     for (let i = 0; i < this.segments.length; i++) {
       const seg = this.segments[i];
+      if (!seg) continue;
       if (currentTime >= seg.segment[0] && currentTime < seg.segment[1]) {
         foundIndex = i;
         break;
@@ -138,7 +139,13 @@ export class SponsorBlockManager {
         return;
       }
 
+      // Unreachable: foundIndex always points at a segment found above,
+      // but guarded for noUncheckedIndexedAccess without `!` assertions.
       const segment = this.segments[foundIndex];
+      if (!segment) {
+        this.lastSegmentIndex = -1;
+        return;
+      }
       const mode = this.config.categories[segment.category] || "disabled";
 
       if (mode === "auto") {

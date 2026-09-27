@@ -1,12 +1,8 @@
 // lib/sites/youtube/features/codec/index.ts
 
 import { loadFeatureConfig } from "../config-store";
-import {
-  CodecConfig,
-  DEFAULT_CONFIG,
-  sanitizeCodecConfig,
-  STORAGE_KEY,
-} from "./types";
+import type { CodecConfig } from "./types";
+import { DEFAULT_CONFIG, sanitizeCodecConfig, STORAGE_KEY } from "./types";
 
 const VP9_RE = /vp0?9/i;
 const AV1_RE = /av0?1/i;

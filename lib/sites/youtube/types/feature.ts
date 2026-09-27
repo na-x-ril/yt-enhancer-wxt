@@ -1,6 +1,6 @@
 // lib/sites/youtube/types/feature.ts
 
-import { InitialData, InitialPlayerResponse } from "./VideoData";
+import type { InitialData, InitialPlayerResponse } from "./VideoData";
 
 export interface Feature {
   match: (path: string) => boolean;

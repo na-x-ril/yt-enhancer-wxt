@@ -19,14 +19,16 @@ export class ViewCountParser {
 
     if (commaCount === 1) {
       const parts = raw.split(",");
-      return parts[1].length === 3
+      const decimals = parts[1] ?? "";
+      return decimals.length === 3
         ? raw.replace(",", "")
         : raw.replace(",", ".");
     }
 
     if (dotCount === 1) {
       const parts = raw.split(".");
-      return parts[1].length === 3 ? raw.replace(".", "") : raw;
+      const decimals = parts[1] ?? "";
+      return decimals.length === 3 ? raw.replace(".", "") : raw;
     }
 
     return raw;

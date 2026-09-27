@@ -69,11 +69,13 @@ function patchYtInitialData(): void {
                 if (continuations?.[0]) {
                   const firstEntry = continuations[0];
                   const contKey = Object.keys(firstEntry)[0];
-                  const contData = firstEntry[contKey] as
-                    | Record<string, unknown>
-                    | undefined;
-                  if (contData && "continuation" in contData) {
-                    contData.continuation = liveChatContinuation;
+                  if (contKey !== undefined) {
+                    const contData = firstEntry[contKey] as
+                      | Record<string, unknown>
+                      | undefined;
+                    if (contData && "continuation" in contData) {
+                      contData.continuation = liveChatContinuation;
+                    }
                   }
                 }
               }
