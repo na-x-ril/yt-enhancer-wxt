@@ -13,6 +13,16 @@ export default defineContentScript({
 
     interceptor.patch();
     interceptor.subscribe();
-    void interceptor.loadConfig();
+    // document_start can race the ISOLATED bridge (its message listener
+    // may not be registered yet when this posts). Retry once; if that
+    // also fails the interceptor keeps defaults until the next
+    // codec-setting broadcast heals it.
+    void interceptor.loadConfig().catch(() => {
+      setTimeout(() => {
+        void interceptor.loadConfig().catch((error) => {
+          console.warn("[Codec] Failed to load config after retry:", error);
+        });
+      }, 1000);
+    });
   },
 });

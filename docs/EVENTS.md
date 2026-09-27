@@ -44,3 +44,10 @@ Bukan CustomEvent — request/response mentah di `lib/core/bridge/bridge.ts`
 `YT_ENHANCER_GET / SET / REMOVE / CLEAR / GET_ALL` (+ `_<TYPE>_RESPONSE`,
 atau `{ error }` bila gagal). Semua request **timeout 5 dtk**
 (`BRIDGE_TIMEOUT_MS`) — tidak ada lagi promise gantung selamanya.
+
+Bridge berjalan di **semua frame** (`allFrames: true`, kecuali live_chat)
+karena script MAIN juga `allFrames` dan tiap frame post ke window-nya
+sendiri. Satu race tersisa: script `document_start` bisa post sebelum
+listener bridge terdaftar — codec-patch me-retry sekali (lihat
+`youtube-codec-patch.content.ts`); kegagalan berarti default sampai
+broadcast setting berikutnya menyembuhkan.

@@ -25,6 +25,10 @@ function isBridgeRequest(data: unknown): data is BridgeRequest {
 export default defineContentScript({
   matches: ["*://*.youtube.com/*"],
   excludeMatches: ["*://*.youtube.com/live_chat*"],
+  // All frames: MAIN-world scripts (codec patch, dropdown) run with
+  // allFrames:true and post to their OWN window. Without this, any
+  // storage call from a subframe hangs until the bridge timeout.
+  allFrames: true,
   runAt: "document_start",
   world: "ISOLATED",
   main() {
