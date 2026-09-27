@@ -32,17 +32,22 @@ export class ViewCountParser {
     return raw;
   }
 
+  // Suffix may be glued to the digits ("1.2K", "2jt") or separated
+  // ("1,2 jt"). `(?<=\d)` covers the glued case; `\b` the separated one.
+  // NOTE: keep the three branches in sync with extractSuffix() below.
+  private static readonly THOUSAND_RE = /(?:\b|(?<=\d))(rb|k)\b/;
+  private static readonly MILLION_RE = /(?:\b|(?<=\d))(jt|m)\b/;
+  private static readonly BILLION_RE = /(?:\b|(?<=\d))(miliar|b)\b/;
+
   public parseNumber(viewCountStr: string): number {
     if (!viewCountStr) return 0;
 
     const lower = viewCountStr.toLowerCase();
     let multiplier = 1;
 
-    if (/\b(rb)\b/.test(lower) || /\bk\b/.test(lower)) multiplier = 1_000;
-    else if (/\b(jt)\b/.test(lower) || /\bm\b/.test(lower))
-      multiplier = 1_000_000;
-    else if (/\b(miliar)\b/.test(lower) || /\bb\b/.test(lower))
-      multiplier = 1_000_000_000;
+    if (ViewCountParser.THOUSAND_RE.test(lower)) multiplier = 1_000;
+    else if (ViewCountParser.MILLION_RE.test(lower)) multiplier = 1_000_000;
+    else if (ViewCountParser.BILLION_RE.test(lower)) multiplier = 1_000_000_000;
 
     const numberMatch = viewCountStr.match(/[\d.,]+/);
     if (!numberMatch) return 0;
@@ -70,13 +75,13 @@ export class ViewCountParser {
     let divisor = 1;
     let decimalPlaces = 0;
 
-    if (/\b(rb)\b/.test(lower) || /\bk\b/.test(lower)) {
+    if (ViewCountParser.THOUSAND_RE.test(lower)) {
       divisor = 1_000;
       decimalPlaces = 1;
-    } else if (/\b(jt)\b/.test(lower) || /\bm\b/.test(lower)) {
+    } else if (ViewCountParser.MILLION_RE.test(lower)) {
       divisor = 1_000_000;
       decimalPlaces = 1;
-    } else if (/\b(miliar)\b/.test(lower) || /\bb\b/.test(lower)) {
+    } else if (ViewCountParser.BILLION_RE.test(lower)) {
       divisor = 1_000_000_000;
       decimalPlaces = 1;
     }

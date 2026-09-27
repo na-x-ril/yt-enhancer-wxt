@@ -16,6 +16,8 @@ Built with [WXT](https://wxt.dev) v0.20 (MV3 on both Chrome and Firefox) and [Bu
 | `bun zip` | Package `.zip` (Chrome) |
 | `bun zip:firefox` | Package `.zip` (Firefox) |
 | `bun compile` | TypeScript type-check (`tsc --noEmit`) |
+| `bun test` | Unit tests (`vitest run`) |
+| `bun run check-patterns` | Static guardrails (no hanging promises, empty catches, prod logs) |
 
 ## Versioning & releases
 

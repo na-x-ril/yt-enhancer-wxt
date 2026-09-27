@@ -38,7 +38,7 @@ export const waitForElement = async <T extends Element>(
   const existing = document.querySelector<T>(selector);
   if (existing) return existing;
 
-  return new Promise((resolve) => {
+  return new Promise((resolve) => { // check-patterns-safe: always settles via internal timeout below
     let activeElapsed = 0;
     let lastTick = Date.now();
 

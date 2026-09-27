@@ -400,7 +400,7 @@ class WatchFeature {
         return;
       } catch (error) {
         if (attempt < maxRetries - 1) {
-          await new Promise((resolve) => setTimeout(resolve, delayMs));
+          await new Promise((resolve) => setTimeout(resolve, delayMs)); // check-patterns-safe: setTimeout always fires
         } else {
           console.warn(
             "[WatchFeature] Apply player features failed after retries:",

@@ -33,3 +33,21 @@ jobs:
           include-hidden-files: true
           path: .output/*.zip
           retention-days: 14
+
+  guardrails:
+    # Non-blocking for one cycle (continue-on-error): flip to enforced
+    # once the checks prove stable. Covers Batch 6 hallway tests.
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+
+      - run: bun install --frozen-lockfile
+
+      - run: bun run test
+
+      - run: bun run check-patterns
