@@ -26,6 +26,9 @@ jobs:
       - run: bun run zip
       - run: bun run zip:firefox
 
+      - name: List zip outputs
+        run: ls -la .output/ && ls -la .output/*.zip
+
       - uses: actions/upload-artifact@v4
         with:
           name: extension-zips
