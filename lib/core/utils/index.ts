@@ -16,6 +16,10 @@ export const ELEMENT_IDS = {
   menuHeader: "yt-enhancer-menu-header",
 } as const satisfies Record<string, string>;
 
+export const ELEMENT_SELECTORS = {
+  timeWrapper: ".ytp-delhi-modern div.ytp-time-wrapper",
+} as const satisfies Record<string, string>;
+
 export const fetchData = async (url: string): Promise<string> => {
   const res = await fetch(url);
   if (!res.ok) {

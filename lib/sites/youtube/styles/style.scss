@@ -96,8 +96,11 @@ body {
     }
 
     .ytp-delhi-modern .ytp-time-wrapper:not(.ytp-miniplayer-ui *) {
-      padding-right: 0.4rem !important;
       backdrop-filter: blur(8px) !important;
+
+      &.has-patched-pr {
+        padding-right: 0.4rem !important;
+      }
     }
 
     #ytd-watch-info-text {

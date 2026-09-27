@@ -18,6 +18,7 @@ import {
   buildSVG,
   createElement,
   ELEMENT_IDS,
+  ELEMENT_SELECTORS,
   fetchData,
   getVideoId,
   waitForElement,
@@ -252,29 +253,27 @@ class WatchFeature {
       await this.restoreTime();
     }
 
-    if (this.config.sbEnabled && this.state.player && !this.state.isDestroyed) {
-      this.sbManager = new SponsorBlockManager();
-      await this.sbManager.init(this.state.player);
-    }
+    await this.initSB();
 
     this.registerEventListeners();
 
     return () => this.destroy();
   }
 
+  private async initSB(): Promise<void> {
+    if (this.config.sbEnabled && this.state.player && !this.state.isDestroyed) {
+      this.sbManager = new SponsorBlockManager();
+      await this.sbManager.init(this.state.player);
+
+      this.cleanupHandlers.push(
+        () => this.sbManager?.destroy(),
+        () => (this.sbManager = null),
+      );
+    }
+  }
+
   destroy(): void {
     this.state.isDestroyed = true;
-
-    this.timeTrackingCleanup?.();
-    this.timeTrackingCleanup = null;
-
-    this.abortReEdge();
-
-    this.odometer?.destroy();
-    this.odometer = null;
-
-    this.sbManager?.destroy();
-    this.sbManager = null;
 
     for (const fn of this.cleanupHandlers) {
       try {
@@ -285,12 +284,7 @@ class WatchFeature {
     }
     this.cleanupHandlers = [];
 
-    document.getElementById(ELEMENT_IDS.videoInfo)?.remove();
-    document.getElementById(ELEMENT_IDS.dvrIndicator)?.remove();
-    document.getElementById(ELEMENT_IDS.reEdgeButton)?.remove();
-
     this.state = this.createInitialState();
-    this.metadataListenerAttached = false;
   }
 
   private async loadConfig(): Promise<void> {
@@ -324,7 +318,10 @@ class WatchFeature {
       () => window.removeEventListener("yt-enhancer-setting", handleSetting),
       () => window.removeEventListener("yt-enhancer-quality", handleQuality),
       () =>
-        window.removeEventListener("yt-enhancer-codec-reload", handleCodecReload),
+        window.removeEventListener(
+          "yt-enhancer-codec-reload",
+          handleCodecReload,
+        ),
       () =>
         document.removeEventListener(
           "visibilitychange",
@@ -347,6 +344,8 @@ class WatchFeature {
       if (!detail || !Array.isArray(detail.actions)) return;
       this.handleMetadataUpdate(detail.actions);
     });
+
+    this.cleanupHandlers.push(() => (this.metadataListenerAttached = false));
   }
 
   private async reloadForCodecChange(): Promise<void> {
@@ -385,6 +384,11 @@ class WatchFeature {
         if (this.state.state !== VideoState.LIVE) {
           this.timeTrackingCleanup?.();
           this.timeTrackingCleanup = this.setupTimeTracking(this.state.player);
+
+          this.cleanupHandlers.push(
+            () => this.timeTrackingCleanup?.(),
+            () => (this.timeTrackingCleanup = null),
+          );
         }
       }
     } catch (error) {
@@ -690,6 +694,7 @@ class WatchFeature {
       console.log("[WatchFeature] Re-edge aborted (timeout)");
       this.finishReEdge(isDVR, 0);
     }, RE_EDGE_TIMEOUT_MS);
+    this.cleanupHandlers.push(() => this.abortReEdge());
   }
 
   private finishReEdge(isDVR: boolean, bufferingMs: number): void {
@@ -701,7 +706,10 @@ class WatchFeature {
     }
 
     if (this.state.player && this.reEdgeListener) {
-      this.state.player.removeEventListener("onStateChange", this.reEdgeListener);
+      this.state.player.removeEventListener(
+        "onStateChange",
+        this.reEdgeListener,
+      );
     }
     this.reEdgeListener = null;
 
@@ -728,7 +736,9 @@ class WatchFeature {
         }
       }
     } else if (isDVR) {
-      console.log("[WatchFeature] Re-edge finished without seek (0ms buffering)");
+      console.log(
+        "[WatchFeature] Re-edge finished without seek (0ms buffering)",
+      );
     } else {
       console.log(
         "[WatchFeature] Re-edge finished (non-DVR, waiting for YT rate reset)",
@@ -957,7 +967,7 @@ class WatchFeature {
       if (this.state.state === VideoState.LIVE) {
         const isDVREnabled = this.getDVREnabled(ytInitialPlayerResponseObj);
         console.log("[WatchFeature] Is live DVR enabled:", isDVREnabled);
-        await waitForElement("div.ytp-time-wrapper", 5000);
+        await waitForElement(ELEMENT_SELECTORS.timeWrapper, 5000);
         if (!this.state.isDestroyed) this.displayDVRIndicator(isDVREnabled);
         if (!this.state.isDestroyed) this.displayReEdgeButton();
       }
@@ -1080,7 +1090,9 @@ class WatchFeature {
       this.state.currentViewCount = newViewCount;
       this.state.currentDateText = dateText;
 
-      const titleElement = await waitForElement("#above-the-fold > div#title-row");
+      const titleElement = await waitForElement(
+        "#above-the-fold > div#title-row",
+      );
       if (this.state.isDestroyed || !titleElement) return;
 
       const { suffix, divisor, decimalPlaces } =
@@ -1143,6 +1155,11 @@ class WatchFeature {
 
       infoWrapper.append(infoContainer, this.createRefreshButton());
       titleElement.insertAdjacentElement("afterend", infoWrapper);
+      this.cleanupHandlers.push(
+        () => this.odometer?.destroy(),
+        () => (this.odometer = null),
+        () => document.getElementById(ELEMENT_IDS.videoInfo)?.remove(),
+      );
     } catch (error) {
       console.warn("[WatchFeature] Display video info error:", error);
     }
@@ -1191,12 +1208,10 @@ class WatchFeature {
   private displayDVRIndicator(isDVREnabled: boolean): void {
     if (this.state.isDestroyed) return;
     try {
-      document.getElementById(ELEMENT_IDS.dvrIndicator)?.remove();
-
       if (this.state.state !== VideoState.LIVE || isDVREnabled) return;
 
       const timeWrapper = document.querySelector<HTMLElement>(
-        "div.ytp-time-wrapper",
+        ELEMENT_SELECTORS.timeWrapper,
       );
       if (!timeWrapper) return;
 
@@ -1211,6 +1226,9 @@ class WatchFeature {
 
       indicator.append(separator, text);
       timeWrapper.appendChild(indicator);
+      this.cleanupHandlers.push(() =>
+        document.getElementById(ELEMENT_IDS.dvrIndicator)?.remove(),
+      );
     } catch (error) {
       console.warn("[WatchFeature] Display DVR indicator error:", error);
     }
@@ -1219,12 +1237,10 @@ class WatchFeature {
   private displayReEdgeButton(): void {
     if (this.state.isDestroyed) return;
     try {
-      document.getElementById(ELEMENT_IDS.reEdgeButton)?.remove();
-
       if (this.state.state !== VideoState.LIVE) return;
 
       const timeWrapper = document.querySelector<HTMLElement>(
-        "div.ytp-time-wrapper",
+        ELEMENT_SELECTORS.timeWrapper,
       );
       if (!timeWrapper) return;
 
@@ -1243,10 +1259,22 @@ class WatchFeature {
       );
 
       button.onclick = () => this.reEdge();
+      this.patchTimeWrapper(timeWrapper);
       timeWrapper.appendChild(button);
+      this.cleanupHandlers.push(() =>
+        document.getElementById(ELEMENT_IDS.reEdgeButton)?.remove(),
+      );
     } catch (error) {
       console.warn("[WatchFeature] Display re-edge button error:", error);
     }
+  }
+
+  private patchTimeWrapper(timeWrapper: HTMLElement): void {
+    timeWrapper.classList.add("has-patched-pr");
+
+    this.cleanupHandlers.push(() =>
+      timeWrapper.classList.remove("has-patched-pr"),
+    );
   }
 }
 
