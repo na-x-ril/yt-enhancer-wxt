@@ -75,6 +75,7 @@ export class Dropdown {
     null;
   private codecConfigDirty = false;
   private isOpen = false;
+  private menuInjectRaf: number | null = null;
   private currentPage: Page = "main";
   private cleanupFns: Array<() => void> = [];
 
@@ -245,6 +246,8 @@ export class Dropdown {
       window.dispatchEvent(new CustomEvent("yt-enhancer-refresh"));
 
       setTimeout(() => {
+        // The menu may have been destroyed while waiting.
+        if (!refreshButton.isConnected) return;
         refreshButton.disabled = false;
         if (svg) svg.style.transform = "rotate(0deg)";
       }, 500);
@@ -780,21 +783,29 @@ export class Dropdown {
     if (!menu || document.querySelector("#yt-enhancer-menu")) return;
 
     const waitForPopupContainer = () => {
+      this.menuInjectRaf = null;
+      // Destroy may have run while waiting — never touch detached DOM.
+      if (this.menu === null) return;
       const popupContainer = document.querySelector<Element>(
         "ytd-popup-container.style-scope",
       );
 
       if (popupContainer) {
-        popupContainer.appendChild(menu);
+        popupContainer.appendChild(this.menu);
       } else {
-        requestAnimationFrame(waitForPopupContainer);
+        this.menuInjectRaf = requestAnimationFrame(waitForPopupContainer);
       }
     };
 
-    requestAnimationFrame(waitForPopupContainer);
+    this.menuInjectRaf = requestAnimationFrame(waitForPopupContainer);
   }
 
   destroy() {
+    if (this.menuInjectRaf !== null) {
+      cancelAnimationFrame(this.menuInjectRaf);
+      this.menuInjectRaf = null;
+    }
+
     this.cleanupFns.forEach((fn) => {
       try {
         fn();

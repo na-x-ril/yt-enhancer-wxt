@@ -136,6 +136,11 @@ export class Odometer {
   private digits: HTMLElement[] = [];
   private ribbons: Record<number, HTMLElement> = {};
   private transitionEndBound = false;
+  private transitionEndHandlers: Array<{
+    event: string;
+    handler: () => void;
+  }> = [];
+  private pendingTimeouts = new Set<number>();
   private animationId: number | null = null;
 
   constructor(options: OdometerOptions) {
@@ -175,25 +180,35 @@ export class Odometer {
 
     let renderEnqueued = false;
     for (const event of TRANSITION_END_EVENTS) {
-      this.el.addEventListener(
-        event,
-        () => {
-          if (renderEnqueued) return;
-          renderEnqueued = true;
-          setTimeout(() => {
-            try {
-              this.render();
-              this.el.dispatchEvent(new Event("odometerdone"));
-            } catch (error) {
-              console.warn("[Odometer] Transition end render error:", error);
-            } finally {
-              renderEnqueued = false;
-            }
-          }, 0);
-        },
-        false,
-      );
+      const handler = () => {
+        if (renderEnqueued) return;
+        renderEnqueued = true;
+        this.defer(() => {
+          try {
+            this.render();
+            this.el.dispatchEvent(new Event("odometerdone"));
+          } catch (error) {
+            console.warn("[Odometer] Transition end render error:", error);
+          } finally {
+            renderEnqueued = false;
+          }
+        });
+      };
+      this.el.addEventListener(event, handler, false);
+      this.transitionEndHandlers.push({ event, handler });
     }
+  }
+
+  /**
+   * setTimeout(0) tracked so destroy() can cancel callbacks that would
+   * otherwise touch a detached element.
+   */
+  private defer(fn: () => void): void {
+    const id = window.setTimeout(() => {
+      this.pendingTimeouts.delete(id);
+      fn();
+    }, 0);
+    this.pendingTimeouts.add(id);
   }
 
   private resetFormat(): void {
@@ -251,15 +266,26 @@ export class Odometer {
     this.el.style.setProperty("--odometer-duration", `${durationMs}ms`);
     this.animate(cleaned, durationMs);
 
-    setTimeout(() => {
+    this.defer(() => {
       void this.el.offsetHeight;
       addClass(this.el, "odometer-animating");
-    }, 0);
+    });
 
     this.value = cleaned;
   }
 
   destroy(): void {
+    for (const id of this.pendingTimeouts) {
+      window.clearTimeout(id);
+    }
+    this.pendingTimeouts.clear();
+
+    for (const { event, handler } of this.transitionEndHandlers) {
+      this.el.removeEventListener(event, handler, false);
+    }
+    this.transitionEndHandlers = [];
+    this.transitionEndBound = false;
+
     if (this.animationId !== null) {
       cancelAnimationFrame(this.animationId);
       this.animationId = null;

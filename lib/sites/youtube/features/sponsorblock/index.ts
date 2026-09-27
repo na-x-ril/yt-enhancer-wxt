@@ -195,7 +195,9 @@ export class SponsorBlockManager {
     for (const fn of this.cleanupFns) {
       try {
         fn();
-      } catch {}
+      } catch (error) {
+        console.warn("[SB] Cleanup error:", error);
+      }
     }
     this.cleanupFns = [];
     this.segments = [];

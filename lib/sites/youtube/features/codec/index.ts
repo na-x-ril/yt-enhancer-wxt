@@ -17,6 +17,10 @@ declare global {
   interface Window {
     __ytEnhancerCodecPatched?: boolean;
     __ytEnhancerOriginalIsTypeSupported?: (type: string) => boolean;
+    __ytEnhancerOriginalCanPlayType?: (
+      this: HTMLMediaElement,
+      type: string,
+    ) => CanPlayTypeResult;
   }
 }
 
@@ -55,6 +59,7 @@ export function getRemainingCodecs(
 export class CodecInterceptor {
   private config: CodecConfig = { ...DEFAULT_CONFIG };
   private cleanupFns: Array<() => void> = [];
+  private subscribed = false;
 
   patch(): void {
     if (window.__ytEnhancerCodecPatched) return;
@@ -74,6 +79,7 @@ export class CodecInterceptor {
     }
 
     const originalCanPlayType = HTMLMediaElement.prototype.canPlayType;
+    window.__ytEnhancerOriginalCanPlayType = originalCanPlayType;
     HTMLMediaElement.prototype.canPlayType = function (
       this: HTMLMediaElement,
       type: string,
@@ -98,6 +104,9 @@ export class CodecInterceptor {
   }
 
   subscribe(): void {
+    if (this.subscribed) return;
+    this.subscribed = true;
+
     const handleSetting = (e: Event) => {
       const detail = (e as CustomEvent<{ config?: unknown }>).detail;
       if (!detail || !detail.config) return;
@@ -114,9 +123,15 @@ export class CodecInterceptor {
     for (const fn of this.cleanupFns) {
       try {
         fn();
-      } catch {}
+      } catch (error) {
+        console.warn("[Codec] Cleanup error:", error);
+      }
     }
     this.cleanupFns = [];
+    this.subscribed = false;
+    // NOTE: the MediaSource/canPlayType patch above is intentionally
+    // page-lifetime. The player probes codecs continuously, so restoring
+    // the originals mid-session would silently change playback behavior.
   }
 
   static readonly shared = new CodecInterceptor();
