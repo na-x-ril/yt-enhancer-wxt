@@ -1,6 +1,6 @@
 // lib/sites/youtube/features/codec/index.ts
 
-import { storageBridge } from "@/lib/core/bridge/bridge";
+import { loadFeatureConfig } from "../config-store";
 import {
   CodecConfig,
   DEFAULT_CONFIG,
@@ -88,12 +88,9 @@ export class CodecInterceptor {
   }
 
   async loadConfig(): Promise<void> {
-    try {
-      const saved = await storageBridge.get(STORAGE_KEY);
-      this.updateConfig(sanitizeCodecConfig(saved));
-    } catch (error) {
-      console.warn("[Codec] Failed to load config:", error);
-    }
+    this.updateConfig(
+      await loadFeatureConfig(STORAGE_KEY, "codec config", sanitizeCodecConfig),
+    );
   }
 
   updateConfig(config: CodecConfig): void {

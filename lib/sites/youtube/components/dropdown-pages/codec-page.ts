@@ -12,7 +12,7 @@ const TOGGLE_ITEMS: Array<{ id: CodecToggleKey; label: string; hint: string }> =
   ];
 
 export function createCodecPage(
-  config: CodecConfig,
+  getConfig: () => CodecConfig,
   onBack: () => void,
   onToggle: (id: CodecToggleKey, value: boolean) => boolean,
   onApply: () => void,
@@ -61,7 +61,7 @@ export function createCodecPage(
   page.appendChild(warning);
 
   for (const item of TOGGLE_ITEMS) {
-    page.appendChild(createToggleRow(config, item, onToggle));
+    page.appendChild(createToggleRow(getConfig, item, onToggle));
   }
 
   const applyBtn = createElement("button", {
@@ -80,7 +80,7 @@ export function createCodecPage(
 }
 
 function createToggleRow(
-  config: CodecConfig,
+  getConfig: () => CodecConfig,
   item: { id: CodecToggleKey; label: string; hint: string },
   onToggle: (id: CodecToggleKey, value: boolean) => boolean,
 ): HTMLElement {
@@ -88,7 +88,7 @@ function createToggleRow(
     className: "toggle-item",
     attrs: { "data-codec-id": item.id },
     role: "menuitemcheckbox",
-    ariaChecked: String(config[item.id]),
+    ariaChecked: String(getConfig()[item.id]),
   });
 
   const labelWrapper = createElement("div", {
@@ -108,7 +108,7 @@ function createToggleRow(
   labelWrapper.append(labelSpan, hintSpan);
 
   const toggleSwitch = createElement("div", {
-    className: `toggle-switch ${config[item.id] ? "active" : ""}`,
+    className: `toggle-switch ${getConfig()[item.id] ? "active" : ""}`,
   });
   toggleSwitch.appendChild(createElement("div", { className: "toggle-knob" }));
 

@@ -1,4 +1,4 @@
-import { storageBridge } from "@/lib/core/bridge/bridge";
+import { loadFeatureConfig } from "../config-store";
 import type { YouTubePlayer } from "../../types/player";
 import { getVideoId } from "@/lib/core/utils";
 import { fetchSegments, clearCache, isFullyDisabled } from "./api";
@@ -62,12 +62,11 @@ export class SponsorBlockManager {
   }
 
   private async loadConfig(): Promise<void> {
-    try {
-      const saved = await storageBridge.get(STORAGE_KEY);
-      this.config = sanitizeSBConfig(saved);
-    } catch {
-      console.warn("[SB] Failed to load config");
-    }
+    this.config = await loadFeatureConfig(
+      STORAGE_KEY,
+      "SponsorBlock config",
+      sanitizeSBConfig,
+    );
   }
 
   private async fetchAndRender(): Promise<void> {

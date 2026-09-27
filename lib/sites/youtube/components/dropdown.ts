@@ -1,4 +1,3 @@
-import { storageBridge } from "@/lib/core/bridge/bridge";
 import { buildSVG, createElement, ELEMENT_IDS } from "@/lib/core/utils";
 import { createSponsorBlockPage } from "./dropdown-pages/sponsorblock-page";
 import { createCodecPage } from "./dropdown-pages/codec-page";
@@ -7,7 +6,7 @@ import {
   STORAGE_KEY as SB_STORAGE_KEY,
   DEFAULT_CONFIG as SB_DEFAULT_CONFIG,
   ALL_CATEGORIES,
-  sanitizeSBMode,
+  sanitizeSBConfig,
 } from "../features/sponsorblock/types";
 import type { CodecConfig } from "../features/codec/types";
 import {
@@ -20,6 +19,10 @@ import {
   probeCodecSupport,
 } from "../features/codec";
 import type { Quality } from "../types/player";
+import {
+  loadFeatureConfig,
+  saveFeatureConfig,
+} from "../features/config-store";
 import {
   DEFAULT_CONFIG,
   normalizeSavedConfig,
@@ -80,48 +83,33 @@ export class Dropdown {
     await this.loadSBConfig();
     await this.loadCodecConfig();
     this.dispatchCodecSetting();
+    this.dispatchSBSetting();
     this.createUI();
     this.attachListeners();
   }
 
   private async loadConfig() {
-    try {
-      const saved = await storageBridge.get(STORAGE_KEY);
-      this.config = normalizeSavedConfig(saved);
-    } catch (error) {
-      console.warn("Failed to load dropdown config:", error);
-    }
+    this.config = await loadFeatureConfig(
+      STORAGE_KEY,
+      "dropdown config",
+      normalizeSavedConfig,
+    );
   }
 
   private async loadSBConfig() {
-    try {
-      const saved = (await storageBridge.get(
-        SB_STORAGE_KEY,
-      )) as Record<string, unknown> | undefined;
-      if (saved) {
-        const categories = saved.categories as Record<string, unknown> | undefined;
-        if (categories) {
-          const merged = { ...SB_DEFAULT_CONFIG.categories };
-          for (const cat of ALL_CATEGORIES) {
-            merged[cat] = sanitizeSBMode(categories[cat]);
-          }
-          this.sbConfig = { categories: merged };
-        } else {
-          this.sbConfig = { ...SB_DEFAULT_CONFIG };
-        }
-      }
-    } catch (error) {
-      console.warn("Failed to load SB config:", error);
-    }
+    this.sbConfig = await loadFeatureConfig(
+      SB_STORAGE_KEY,
+      "SponsorBlock config",
+      sanitizeSBConfig,
+    );
   }
 
   private async loadCodecConfig() {
-    try {
-      const saved = await storageBridge.get(CODEC_STORAGE_KEY);
-      this.codecConfig = sanitizeCodecConfig(saved);
-    } catch (error) {
-      console.warn("Failed to load codec config:", error);
-    }
+    this.codecConfig = await loadFeatureConfig(
+      CODEC_STORAGE_KEY,
+      "codec config",
+      sanitizeCodecConfig,
+    );
   }
 
   private createUI() {
@@ -176,7 +164,7 @@ export class Dropdown {
     this.codecPage = createElement("div", { className: "slide-page" });
     this.codecPage.appendChild(
       createCodecPage(
-        this.codecConfig,
+        () => this.codecConfig,
         () => this.navigateTo("main"),
         (id, value) => this.onCodecToggle(id, value),
         () => this.onCodecApply(),
@@ -551,11 +539,11 @@ export class Dropdown {
     this.codecConfigDirty = true;
     this.refreshCodecApplyBtn();
 
-    try {
-      await storageBridge.set(CODEC_STORAGE_KEY, this.codecConfig);
-    } catch (error) {
-      console.warn("Failed to save codec config:", error);
-    }
+    await saveFeatureConfig(
+      CODEC_STORAGE_KEY,
+      "codec config",
+      this.codecConfig,
+    );
 
     this.dispatchCodecSetting();
   }
@@ -568,22 +556,26 @@ export class Dropdown {
     );
   }
 
+  private dispatchSBSetting() {
+    window.dispatchEvent(
+      new CustomEvent("yt-enhancer-sb-setting", {
+        detail: { type: "sponsorblock", config: this.sbConfig },
+      }),
+    );
+  }
+
   private async onSBConfigChange(newConfig: SponsorBlockConfig) {
     this.sbConfig = newConfig;
 
     this.refreshSBNavBadge();
 
-    try {
-      await storageBridge.set(SB_STORAGE_KEY, this.sbConfig);
-    } catch (error) {
-      console.warn("Failed to save SB config:", error);
-    }
-
-    window.dispatchEvent(
-      new CustomEvent("yt-enhancer-sb-setting", {
-        detail: { type: 'sponsorblock', config: this.sbConfig },
-      }),
+    await saveFeatureConfig(
+      SB_STORAGE_KEY,
+      "SponsorBlock config",
+      this.sbConfig,
     );
+
+    this.dispatchSBSetting();
   }
 
   private refreshSBNavBadge() {
@@ -748,11 +740,7 @@ export class Dropdown {
   }
 
   private async saveConfig() {
-    try {
-      await storageBridge.set(STORAGE_KEY, this.config);
-    } catch (error) {
-      console.warn("Failed to save dropdown config:", error);
-    }
+    await saveFeatureConfig(STORAGE_KEY, "dropdown config", this.config);
   }
 
   private dispatchSettingChange(setting: ToggleKey, value: boolean) {
