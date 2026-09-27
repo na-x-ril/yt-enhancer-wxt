@@ -17,6 +17,7 @@ import type {
 import {
   ELEMENT_SELECTORS,
   getVideoId,
+  isReadyPlayerState,
   waitForElement,
   waitForPlayer,
 } from "@/lib/core/utils";
@@ -60,6 +61,7 @@ class WatchFeature {
   private config: Config = { ...DEFAULT_CONFIG };
   private timeTrackingCleanup: (() => void) | null = null;
   private metadataHandler: ((event: Event) => void) | null = null;
+  private playerReadyHealer: ((...args: unknown[]) => void) | null = null;
   private cleanupHandlers: Array<() => void> = [];
   private metadataListenerAttached = false;
   private sbManager: SponsorBlockManager | null = null;
@@ -385,6 +387,56 @@ class WatchFeature {
       }
     } catch (error) {
       console.warn("[WatchFeature] Handle video error:", error);
+      this.armPlayerReadyHealer();
+    }
+  }
+
+  /**
+   * Self-heal for player-not-ready-yet (e.g. autoplay off): when the
+   * player first enters a ready state, run handleVideo once. One-shot,
+   * destroy-aware, and superseded by destroy()/re-init which disarm it.
+   * Without this, features stay dead until manual refresh or navigation.
+   */
+  private armPlayerReadyHealer(): void {
+    if (this.state.isDestroyed || this.state.player) return;
+    if (this.playerReadyHealer) return;
+    const element = document.querySelector<HTMLElement>("#movie_player");
+    if (!element) return;
+    const player = element as unknown as YouTubePlayer;
+
+    const handler = (...args: unknown[]) => {
+      if (this.state.isDestroyed || this.state.player) {
+        this.disarmPlayerReadyHealer();
+        return;
+      }
+      const [playerState] = args;
+      if (!isReadyPlayerState(playerState)) return;
+      this.disarmPlayerReadyHealer();
+      void this.handleVideo();
+    };
+
+    this.playerReadyHealer = handler;
+    try {
+      player.addEventListener("onStateChange", handler);
+    } catch {
+      this.playerReadyHealer = null;
+      return;
+    }
+    this.cleanupHandlers.push(() => this.disarmPlayerReadyHealer());
+  }
+
+  private disarmPlayerReadyHealer(): void {
+    const handler = this.playerReadyHealer;
+    this.playerReadyHealer = null;
+    if (!handler) return;
+    const element = document.querySelector<HTMLElement>("#movie_player");
+    try {
+      (element as unknown as YouTubePlayer | null)?.removeEventListener(
+        "onStateChange",
+        handler,
+      );
+    } catch (error) {
+      console.warn("[WatchFeature] Player-ready healer cleanup error:", error);
     }
   }
 

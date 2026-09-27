@@ -130,6 +130,14 @@ const REQUIRED_METHODS = [
 
 const READY_STATES = new Set([1, 2, 3]);
 
+/**
+ * True when a raw `onStateChange` value means the player is usable
+ * (playing / paused / buffering). Used by one-shot waiters that cannot
+ * afford a full waitForPlayer probe on every state change.
+ */
+export const isReadyPlayerState = (state: unknown): state is number =>
+  typeof state === "number" && READY_STATES.has(state);
+
 const isPlayerReady = (player: YouTubePlayer): boolean => {
   try {
     const allMethodsExist = REQUIRED_METHODS.every(
