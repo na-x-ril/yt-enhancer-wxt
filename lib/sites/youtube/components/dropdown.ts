@@ -166,7 +166,7 @@ export class Dropdown {
     this.sbPage = createElement("div", { className: "slide-page" });
     this.sbPage.appendChild(
       createSponsorBlockPage(
-        this.sbConfig,
+        () => this.sbConfig,
         () => this.navigateTo("main"),
         (newConfig) => this.onSBConfigChange(newConfig),
       ),

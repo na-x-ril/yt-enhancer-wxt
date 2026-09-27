@@ -14,7 +14,7 @@ import { ALL_CATEGORIES, isSBMode } from "../../features/sponsorblock/types";
 const MODES: SBMode[] = ["auto", "show_skip", "disabled"];
 
 export function createSponsorBlockPage(
-  config: SponsorBlockConfig,
+  getConfig: () => SponsorBlockConfig,
   onBack: () => void,
   onChange: (config: SponsorBlockConfig) => void,
 ): HTMLElement {
@@ -48,14 +48,14 @@ export function createSponsorBlockPage(
   page.appendChild(header);
 
   for (const cat of ALL_CATEGORIES) {
-    page.appendChild(createCategoryModeRow(config, cat, onChange));
+    page.appendChild(createCategoryModeRow(getConfig, cat, onChange));
   }
 
   return page;
 }
 
 function createCategoryModeRow(
-  config: SponsorBlockConfig,
+  getConfig: () => SponsorBlockConfig,
   category: SponsorBlockCategory,
   onChange: (config: SponsorBlockConfig) => void,
 ): HTMLElement {
@@ -88,7 +88,7 @@ function createCategoryModeRow(
     const option = createElement("option", {
       value: mode,
       textContent: MODE_LABELS[mode],
-      selected: mode === config.categories[category],
+      selected: mode === getConfig().categories[category],
     });
     select.appendChild(option);
   }
@@ -99,7 +99,7 @@ function createCategoryModeRow(
     if (!isSBMode(raw)) return;
     const newConfig: SponsorBlockConfig = {
       categories: {
-        ...config.categories,
+        ...getConfig().categories,
         [category]: raw,
       },
     };
