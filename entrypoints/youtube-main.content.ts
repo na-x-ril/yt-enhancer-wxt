@@ -73,6 +73,10 @@ class YouTubeContentScript {
 
 export default defineContentScript({
   matches: ["*://www.youtube.com/*"],
+  // The app (dropdown, watch, SponsorBlock) has nothing to do inside the
+  // live-chat iframe, and its storage calls would hang forever because the
+  // ISOLATED bridge deliberately excludes live_chat frames.
+  excludeMatches: ["*://*.youtube.com/live_chat*"],
   runAt: "document_idle",
   allFrames: true,
   world: "MAIN",
