@@ -55,7 +55,10 @@ import {
   saveTime,
   setupTimeTracking,
 } from "./time-tracking";
-import { parseMetadataActions } from "./metadata-update";
+import {
+  parseMetadataUpdate,
+  type MetadataUpdateDetail,
+} from "./metadata-update";
 import { VideoInfoView } from "./video-info";
 import { ReEdgeController } from "./re-edge";
 
@@ -220,13 +223,9 @@ class WatchFeature {
 
     const handler = (event: Event) => {
       if (this.state.isDestroyed) return;
-      const detail = (
-        event as CustomEvent<{
-          actions?: Array<UpdateViewershipAction | UpdateDateTextAction>;
-        }>
-      ).detail;
-      if (!detail || !Array.isArray(detail.actions)) return;
-      this.handleMetadataUpdate(detail.actions);
+      const detail = (event as CustomEvent<MetadataUpdateDetail>).detail;
+      if (!detail) return;
+      this.handleMetadataUpdate(detail);
     };
 
     this.metadataHandler = handler;
@@ -360,12 +359,10 @@ class WatchFeature {
     }
   }
 
-  private handleMetadataUpdate(
-    actions: Array<UpdateViewershipAction | UpdateDateTextAction>,
-  ): void {
+  private handleMetadataUpdate(detail: MetadataUpdateDetail): void {
     if (this.state.isDestroyed) return;
     try {
-      const update = parseMetadataActions(actions);
+      const update = parseMetadataUpdate(detail);
       if (!update) return;
       void this.videoInfo.displayVideoInfo(
         this.state,

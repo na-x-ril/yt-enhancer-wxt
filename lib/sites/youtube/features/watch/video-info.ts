@@ -39,7 +39,17 @@ export class VideoInfoView {
   ): Promise<void> {
     if (this.deps.isDestroyed()) return;
     try {
-      if (!viewCount) return;
+      if (!viewCount) {
+        // Date-only update: view count absent, but the date may have changed.
+        if (isUpdate && dateText) {
+          const dateTextElement = document.getElementById(ELEMENT_IDS.dateText);
+          if (dateTextElement && dateText !== state.currentDateText) {
+            dateTextElement.textContent = dateText;
+            state.currentDateText = dateText;
+          }
+        }
+        return;
+      }
 
       const newViewCount = exactCount ?? this.parser.parse(viewCount).count;
       const existingInfo = document.getElementById(ELEMENT_IDS.videoInfo);

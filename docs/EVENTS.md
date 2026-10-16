@@ -29,7 +29,7 @@ key storage sama di kedua sisi.
 | `yt-enhancer-codec-setting` | `dropdown/` (`dispatchCodecSetting`; saat init + tiap berubah) | `{ config: CodecConfig }` | `codec/index.ts` → `subscribe` (re-sanitize) |
 | `yt-enhancer-sb-setting` | `dropdown/` (`dispatchSBSetting`; saat init + tiap berubah) | `{ type: "sponsorblock", config: SponsorBlockConfig }` | `sponsorblock/index.ts` → `handleSetting` (wajib `type === "sponsorblock"`, re-sanitize) |
 | `yt-enhancer-codecs-updated` | `watch/index.ts` (`fetchAndLogVideoData`) | `{ video: string[], audio: string[] }` | `dropdown/` → `handleCodecsUpdated` (validasi array string) |
-| `yt-enhancer-metadata-update` | `youtube-fetch-interceptor.content.ts` (patch `window.fetch` utk `/youtubei/v1/updated_metadata`) | `{ actions: [...] }` | `watch/index.ts` → `handleMetadataUpdate` via `parseMetadataActions` |
+| `yt-enhancer-metadata-update` | `youtube-fetch-interceptor.content.ts` (patch `window.fetch` utk `/youtubei/v1/updated_metadata`) | `{ actions?: [...], frameworkUpdates?: {...} }` — WEB 2026 mengirim `frameworkUpdates.entityBatchUpdate.mutations[].payload.viewCountEntity`; `actions[]` lama tetap didukung | `watch/index.ts` → `handleMetadataUpdate` via `parseMetadataUpdate` |
 
 ## Storage keys (`browser.storage.local` via `storageBridge`)
 

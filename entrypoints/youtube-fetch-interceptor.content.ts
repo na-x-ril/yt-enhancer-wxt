@@ -33,10 +33,15 @@ export default defineContentScript({
         if (url?.includes("/youtubei/v1/updated_metadata")) {
           try {
             const data = await response.clone().json();
-            if (data.actions) {
+            // WEB currently ships updates as `frameworkUpdates`
+            // (entityBatchUpdate mutations); older clients used `actions`.
+            if (data.actions || data.frameworkUpdates) {
               window.dispatchEvent(
                 new CustomEvent(EVENTS.metadataUpdate, {
-                  detail: { actions: data.actions },
+                  detail: {
+                    actions: data.actions,
+                    frameworkUpdates: data.frameworkUpdates,
+                  },
                 }),
               );
             }
