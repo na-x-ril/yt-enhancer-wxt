@@ -10,10 +10,7 @@
 //   re-edge.ts        live catch-up (ReEdgeController)
 
 import type { WatchFeatureInterface, YouTubePlayer } from "../../types";
-import type {
-  UpdateDateTextAction,
-  UpdateViewershipAction,
-} from "../../types/VideoData";
+import type { UpdatedMetadata } from "../../types/VideoData";
 import {
   ELEMENT_SELECTORS,
   getVideoId,
@@ -55,10 +52,7 @@ import {
   saveTime,
   setupTimeTracking,
 } from "./time-tracking";
-import {
-  parseMetadataUpdate,
-  type MetadataUpdateDetail,
-} from "./metadata-update";
+import { parseMetadataUpdate } from "./metadata-update";
 import { VideoInfoView } from "./video-info";
 import { ReEdgeController } from "./re-edge";
 
@@ -223,7 +217,7 @@ class WatchFeature {
 
     const handler = (event: Event) => {
       if (this.state.isDestroyed) return;
-      const detail = (event as CustomEvent<MetadataUpdateDetail>).detail;
+      const detail = (event as CustomEvent<UpdatedMetadata>).detail;
       if (!detail) return;
       this.handleMetadataUpdate(detail);
     };
@@ -278,7 +272,7 @@ class WatchFeature {
         await this.applyPlayerFeatures(this.state.player);
         if (this.state.state !== VideoState.LIVE) {
           // The previous cleanup (if any) is invoked before re-setup, and
-          // destroy() always runs the current one — no need to register
+          // destroy() always runs the current one. No need to register
           // per-refresh closures (they would accumulate).
           this.timeTrackingCleanup?.();
           this.timeTrackingCleanup = setupTimeTracking(
@@ -359,7 +353,7 @@ class WatchFeature {
     }
   }
 
-  private handleMetadataUpdate(detail: MetadataUpdateDetail): void {
+  private handleMetadataUpdate(detail: UpdatedMetadata): void {
     if (this.state.isDestroyed) return;
     try {
       const update = parseMetadataUpdate(detail);

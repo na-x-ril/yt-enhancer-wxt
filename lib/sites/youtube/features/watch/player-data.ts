@@ -8,7 +8,7 @@
 
 import { fetchData } from "@/lib/core/utils";
 import type { Quality, VideoStateValue } from "../../types/player";
-import { QUALITY_RANK, VideoState } from "../../types/player";
+import { isQuality, QUALITY_RANK, VideoState } from "../../types/player";
 import type {
   InitialData,
   InitialPlayerResponse,
@@ -47,7 +47,7 @@ export async function fetchVideoData(url: string): Promise<PageData> {
  * Reads the page's own ytInitialData / ytInitialPlayerResponse globals
  * (the script runs in MAIN world) to avoid re-downloading the whole watch
  * page. Returns null when the globals are missing, or when the player
- * response belongs to a different video than `videoId` — after an SPA
+ * response belongs to a different video than `videoId`. After an SPA
  * navigation YouTube can leave the globals pointed at the previous video,
  * so the caller must fall back to a network fetch in that case.
  */
@@ -88,13 +88,13 @@ export function getVideoState(
 export function getAvailableQualities(
   response: InitialPlayerResponse,
 ): Quality[] {
-  const formats = [
-    ...(response.streamingData?.formats ?? []),
-    ...(response.streamingData?.adaptiveFormats ?? []),
-  ];
+  // YouTube no longer ships progressive `streamingData.formats`, so the
+  // adaptive list is the only source.
+  const formats = response.streamingData?.adaptiveFormats ?? [];
   const qualities = new Set<Quality>();
   for (const fmt of formats) {
-    if (fmt.quality && QUALITY_RANK[fmt.quality]) {
+    // YouTube may report qualities the app does not model (e.g. `hd2160`).
+    if (isQuality(fmt.quality)) {
       qualities.add(fmt.quality);
     }
   }
@@ -105,10 +105,9 @@ export function getAvailableCodecs(response: InitialPlayerResponse): {
   video: string[];
   audio: string[];
 } {
-  const formats = [
-    ...(response.streamingData?.formats ?? []),
-    ...(response.streamingData?.adaptiveFormats ?? []),
-  ];
+  // YouTube no longer ships progressive `streamingData.formats`, so the
+  // adaptive list is the only source.
+  const formats = response.streamingData?.adaptiveFormats ?? [];
   const video = new Set<string>();
   const audio = new Set<string>();
   for (const fmt of formats) {
@@ -211,9 +210,7 @@ export function getVideoBadges(
   const badges = videoPrimaryInfo.videoPrimaryInfoRenderer.badges;
   if (!badges?.length) return [];
 
-  return badges
-    .map((badge) => badge.metadataBadgeRenderer.label)
-    .filter((label): label is string => typeof label === "string");
+  return badges.map((badge) => badge.metadataBadgeRenderer.label);
 }
 
 export function getDateText(
