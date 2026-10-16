@@ -7,6 +7,9 @@ import { showSkipButton, hideSkipButton } from "./skip-button";
 import { STORAGE_KEY, DEFAULT_CONFIG, sanitizeSBConfig } from "./types";
 import type { Segment, SponsorBlockConfig, SBMode } from "./types";
 
+// YouTube iframe player state value for "playing".
+const PLAYER_STATE_PLAYING = 1;
+
 export class SponsorBlockManager {
   private config: SponsorBlockConfig = { ...DEFAULT_CONFIG };
   private segments: Segment[] = [];
@@ -15,6 +18,7 @@ export class SponsorBlockManager {
   private cleanupFns: Array<() => void> = [];
   private lastSegmentIndex = -1;
   private isDestroyed = false;
+  private fullyDisabled = false;
   private timeCheckInterval: ReturnType<typeof setInterval> | null = null;
   private currentSkipCallback: (() => void) | null = null;
 
@@ -27,10 +31,14 @@ export class SponsorBlockManager {
     await this.loadConfig();
     await this.fetchAndRender();
     this.registerListeners();
+    // Close the gap between the fetch above and listener registration: if
+    // playback started in that window, no state change will fire again.
+    this.syncTimeCheck();
   }
 
   async onConfigChange(newConfig: SponsorBlockConfig): Promise<void> {
     this.config = newConfig;
+    this.fullyDisabled = isFullyDisabled(this.config);
     if (this.isDestroyed || !this.videoId) return;
 
     // Reset per-segment tracking so the current playback position is
@@ -67,10 +75,11 @@ export class SponsorBlockManager {
       "SponsorBlock config",
       sanitizeSBConfig,
     );
+    this.fullyDisabled = isFullyDisabled(this.config);
   }
 
   private async fetchAndRender(): Promise<void> {
-    if (!this.videoId || isFullyDisabled(this.config)) return;
+    if (!this.videoId || this.fullyDisabled) return;
 
     try {
       this.segments = await fetchSegments(this.videoId, this.config);
@@ -97,12 +106,31 @@ export class SponsorBlockManager {
   }
 
   private syncTimeCheck(): void {
-    if (this.segments.length > 0) {
+    // Only poll while playback advances. When paused/ended the playhead
+    // is static, so the 250ms timer would be pure idle work; player state
+    // changes re-sync it (see handlePlayerState).
+    if (this.segments.length > 0 && this.isPlaying()) {
       this.startTimeCheck();
     } else {
       this.stopTimeCheck();
     }
   }
+
+  private isPlaying(): boolean {
+    const player = this.player;
+    if (!player) return false;
+    try {
+      return player.getPlayerState() === PLAYER_STATE_PLAYING;
+    } catch {
+      return false;
+    }
+  }
+
+  private handlePlayerState = (): void => {
+    if (this.isDestroyed) return;
+    this.checkCurrentSegment();
+    this.syncTimeCheck();
+  };
 
   private handleKeydown = (e: KeyboardEvent): void => {
     if (e.key === "Enter" && this.currentSkipCallback) {
@@ -113,7 +141,7 @@ export class SponsorBlockManager {
 
   private checkCurrentSegment(): void {
     const player = this.player;
-    if (!player || this.isDestroyed || isFullyDisabled(this.config)) return;
+    if (!player || this.isDestroyed || this.fullyDisabled) return;
 
     const currentTime = player.getCurrentTime();
     if (typeof currentTime !== "number") return;
@@ -179,10 +207,15 @@ export class SponsorBlockManager {
 
     window.addEventListener("yt-enhancer-sb-setting", handleSetting);
     document.addEventListener("keydown", this.handleKeydown);
+    this.player?.addEventListener("onStateChange", this.handlePlayerState);
 
     this.cleanupFns.push(() => {
       window.removeEventListener("yt-enhancer-sb-setting", handleSetting);
       document.removeEventListener("keydown", this.handleKeydown);
+      this.player?.removeEventListener(
+        "onStateChange",
+        this.handlePlayerState,
+      );
     });
   }
 
