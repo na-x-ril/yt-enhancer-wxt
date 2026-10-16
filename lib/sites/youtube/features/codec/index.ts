@@ -20,12 +20,29 @@ declare global {
   }
 }
 
+// Keep in sync with resolveBlockedPatterns(): this is the config-based
+// variant used outside the interceptor (e.g. getRemainingCodecs).
 export function isCodecBlocked(input: string, config: CodecConfig): boolean {
   if (config.blockVp9 && VP9_RE.test(input)) return true;
   if (config.blockAv1 && AV1_RE.test(input)) return true;
   if (config.blockVp8 && VP8_RE.test(input)) return true;
   if (config.blockAvc && AVC_RE.test(input)) return true;
   return false;
+}
+
+/**
+ * Resolves the enabled block patterns once per config change. The player
+ * probes isTypeSupported/canPlayType constantly, so the interceptor uses
+ * this precomputed list instead of re-branching on the config on every
+ * call — and touches nothing at all when every codec is allowed.
+ */
+function resolveBlockedPatterns(config: CodecConfig): RegExp[] {
+  const patterns: RegExp[] = [];
+  if (config.blockVp9) patterns.push(VP9_RE);
+  if (config.blockAv1) patterns.push(AV1_RE);
+  if (config.blockVp8) patterns.push(VP8_RE);
+  if (config.blockAvc) patterns.push(AVC_RE);
+  return patterns;
 }
 
 function isBrowserSupported(mimeType: string): boolean {
@@ -53,7 +70,7 @@ export function getRemainingCodecs(
 }
 
 export class CodecInterceptor {
-  private config: CodecConfig = { ...DEFAULT_CONFIG };
+  private blockedPatterns: RegExp[] = resolveBlockedPatterns(DEFAULT_CONFIG);
   private cleanupFns: Array<() => void> = [];
   private subscribed = false;
 
@@ -86,7 +103,10 @@ export class CodecInterceptor {
   }
 
   private isBlocked(type: string): boolean {
-    return isCodecBlocked(type, this.config);
+    for (const pattern of this.blockedPatterns) {
+      if (pattern.test(type)) return true;
+    }
+    return false;
   }
 
   async loadConfig(): Promise<void> {
@@ -96,7 +116,7 @@ export class CodecInterceptor {
   }
 
   updateConfig(config: CodecConfig): void {
-    this.config = { ...config };
+    this.blockedPatterns = resolveBlockedPatterns(config);
   }
 
   subscribe(): void {
