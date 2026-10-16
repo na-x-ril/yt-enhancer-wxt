@@ -1,8 +1,10 @@
 // lib/sites/youtube/features/watch/player-data.ts
 //
-// Pure data layer for the watch page: fetch the page HTML, parse
-// ytInitialData / ytInitialPlayerResponse, and derive view count,
-// badges, date text, qualities, and codecs from them. No DOM, no state.
+// Data layer for the watch page: obtain ytInitialData /
+// ytInitialPlayerResponse (from the page globals, falling back to a page
+// fetch), and derive view count, badges, date text, qualities, and codecs
+// from them. The derivations are pure; only the acquisition steps touch
+// the environment.
 
 import { fetchData } from "@/lib/core/utils";
 import type { Quality, VideoStateValue } from "../../types/player";
@@ -15,10 +17,12 @@ import type {
   ResultsContent,
 } from "../../types/VideoData";
 
-export function parseVideoPage(html: string): {
+export interface PageData {
   ytInitialData: InitialData | null;
   ytInitialPlayerResponse: InitialPlayerResponse | null;
-} {
+}
+
+export function parseVideoPage(html: string): PageData {
   const initialDataMatch = html.match(/var ytInitialData\s*=\s*(\{.*?\});/);
   const initialPlayerResponseMatch = html.match(
     /var ytInitialPlayerResponse\s*=\s*(\{.*?\});/,
@@ -34,12 +38,34 @@ export function parseVideoPage(html: string): {
   };
 }
 
-export async function fetchVideoData(url: string): Promise<{
-  ytInitialData: InitialData | null;
-  ytInitialPlayerResponse: InitialPlayerResponse | null;
-}> {
+export async function fetchVideoData(url: string): Promise<PageData> {
   const html = await fetchData(url);
   return parseVideoPage(html);
+}
+
+/**
+ * Reads the page's own ytInitialData / ytInitialPlayerResponse globals
+ * (the script runs in MAIN world) to avoid re-downloading the whole watch
+ * page. Returns null when the globals are missing, or when the player
+ * response belongs to a different video than `videoId` — after an SPA
+ * navigation YouTube can leave the globals pointed at the previous video,
+ * so the caller must fall back to a network fetch in that case.
+ */
+export function getPageData(videoId: string | null): PageData | null {
+  if (typeof window === "undefined") return null;
+
+  const win = window as unknown as {
+    ytInitialData?: InitialData;
+    ytInitialPlayerResponse?: InitialPlayerResponse;
+  };
+  const response = win.ytInitialPlayerResponse;
+  if (!response) return null;
+  if (videoId && response.videoDetails?.videoId !== videoId) return null;
+
+  const initialData = win.ytInitialData;
+  if (!initialData) return null;
+
+  return { ytInitialData: initialData, ytInitialPlayerResponse: response };
 }
 
 export function getVideoState(

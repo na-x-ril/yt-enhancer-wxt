@@ -38,6 +38,7 @@ import {
 } from "../../types/player";
 import {
   fetchVideoData,
+  getPageData,
   getAvailableCodecs,
   getAvailableQualities,
   getDateText,
@@ -500,7 +501,12 @@ class WatchFeature {
   private async fetchAndLogVideoData(isUpdate = false): Promise<void> {
     if (this.state.isDestroyed) return;
     try {
-      const data = await fetchVideoData(location.href);
+      // Prefer the page's own globals (MAIN world) instead of re-downloading
+      // the whole watch page. The manual refresh still re-fetches to pick up
+      // server-side changes; a stale global (SPA navigation) also re-fetches.
+      const data =
+        (isUpdate ? null : getPageData(this.state.id)) ??
+        (await fetchVideoData(location.href));
       if (this.state.isDestroyed) return;
 
       if (!data.ytInitialData || !data.ytInitialPlayerResponse) return;

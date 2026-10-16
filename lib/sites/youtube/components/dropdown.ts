@@ -1,4 +1,9 @@
-import { buildSVG, createElement, ELEMENT_IDS } from "@/lib/core/utils";
+import {
+  buildSVG,
+  createElement,
+  ELEMENT_IDS,
+  waitForElement,
+} from "@/lib/core/utils";
 import { createSponsorBlockPage } from "./dropdown-pages/sponsorblock-page";
 import { createCodecPage } from "./dropdown-pages/codec-page";
 import type { SponsorBlockConfig } from "../features/sponsorblock/types";
@@ -56,6 +61,9 @@ type CodecToggleKey = keyof CodecConfig;
 const TOGGLE_IDS = new Set<string>(TOGGLE_ITEMS.map((t) => t.id));
 const QUALITY_VALUES = new Set<string>(QUALITY_OPTIONS.map((q) => q.value));
 
+// Bounded wait for YouTube's popup container instead of an unbounded rAF loop.
+const MENU_INJECT_TIMEOUT_MS = 5000;
+
 function isToggleKey(value: string): value is ToggleKey {
   return TOGGLE_IDS.has(value);
 }
@@ -74,7 +82,7 @@ export class Dropdown {
     null;
   private codecConfigDirty = false;
   private isOpen = false;
-  private menuInjectRaf: number | null = null;
+  private menuInjecting = false;
   private currentPage: Page = "main";
   private cleanupFns: Array<() => void> = [];
 
@@ -778,33 +786,24 @@ export class Dropdown {
   }
 
   private injectMenu() {
-    const menu = this.menu;
-    if (!menu || document.querySelector("#yt-enhancer-menu")) return;
+    if (!this.menu || document.querySelector("#yt-enhancer-menu")) return;
+    if (this.menuInjecting) return;
+    this.menuInjecting = true;
 
-    const waitForPopupContainer = () => {
-      this.menuInjectRaf = null;
-      // Destroy may have run while waiting — never touch detached DOM.
-      if (this.menu === null) return;
-      const popupContainer = document.querySelector<Element>(
+    void (async () => {
+      const popupContainer = await waitForElement<Element>(
         "ytd-popup-container.style-scope",
+        MENU_INJECT_TIMEOUT_MS,
       );
+      this.menuInjecting = false;
 
-      if (popupContainer) {
-        popupContainer.appendChild(this.menu);
-      } else {
-        this.menuInjectRaf = requestAnimationFrame(waitForPopupContainer);
-      }
-    };
-
-    this.menuInjectRaf = requestAnimationFrame(waitForPopupContainer);
+      // Destroy may have run while waiting — never touch detached DOM.
+      if (!popupContainer || this.menu === null) return;
+      popupContainer.appendChild(this.menu);
+    })();
   }
 
   destroy() {
-    if (this.menuInjectRaf !== null) {
-      cancelAnimationFrame(this.menuInjectRaf);
-      this.menuInjectRaf = null;
-    }
-
     this.cleanupFns.forEach((fn) => {
       try {
         fn();

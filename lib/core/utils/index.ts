@@ -38,49 +38,60 @@ export const waitForElement = async <T extends Element>(
   const existing = document.querySelector<T>(selector);
   if (existing) return existing;
 
-  return new Promise((resolve) => { // check-patterns-safe: always settles via internal timeout below
-    let activeElapsed = 0;
+  // The MutationObserver is the only detection mechanism. A single timer
+  // tracks the active-time budget and is frozen while the document is
+  // hidden, so a backgrounded tab no longer burns a querySelector tick
+  // every 100ms.
+  return new Promise((resolve) => { // check-patterns-safe: always settles via the timer below
+    let settled = false;
+    let remaining = timeout;
     let lastTick = Date.now();
+    let timer: ReturnType<typeof setTimeout> | null = null;
 
     const cleanup = () => {
       observer.disconnect();
       document.removeEventListener("visibilitychange", onVisibilityChange);
-      clearInterval(interval);
+      if (timer !== null) clearTimeout(timer);
+      timer = null;
     };
 
-    const tryResolve = () => {
-      const element = document.querySelector<T>(selector);
-      if (element) {
-        cleanup();
-        resolve(element);
-      }
+    const finish = (element: T | null) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(element);
     };
 
+    const armTimer = () => {
+      lastTick = Date.now();
+      if (timer !== null) clearTimeout(timer);
+      timer = setTimeout(() => finish(null), remaining);
+    };
+
+    // Only visible time counts toward the timeout, matching the previous
+    // active-time accounting.
     const onVisibilityChange = () => {
-      if (!document.hidden) {
-        lastTick = Date.now();
+      if (settled) return;
+      if (document.hidden) {
+        if (timer !== null) {
+          clearTimeout(timer);
+          timer = null;
+        }
+        remaining = Math.max(0, remaining - (Date.now() - lastTick));
+      } else {
+        armTimer();
       }
     };
 
-    const observer = new MutationObserver(tryResolve);
+    const observer = new MutationObserver(() => {
+      const element = document.querySelector<T>(selector);
+      if (element) finish(element);
+    });
     observer.observe(document.body, { childList: true, subtree: true });
     document.addEventListener("visibilitychange", onVisibilityChange);
 
-    const interval = setInterval(() => {
-      const now = Date.now();
-      if (!document.hidden) {
-        activeElapsed += now - lastTick;
-      }
-      lastTick = now;
-
-      if (activeElapsed >= timeout) {
-        cleanup();
-        resolve(null);
-        return;
-      }
-
-      tryResolve();
-    }, 100);
+    lastTick = Date.now();
+    if (!document.hidden) armTimer();
   });
 };
 
