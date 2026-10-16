@@ -5,7 +5,7 @@
 // fields (previously scattered across the shared State); the host only
 // supplies guards and the player.
 
-import { ELEMENT_IDS } from "@/lib/core/utils";
+import { ELEMENT_IDS, ELEMENT_SELECTORS } from "@/lib/core/utils";
 import type { YouTubePlayer } from "../../types/player";
 
 const RE_EDGE_SPEED = 2;
@@ -33,7 +33,7 @@ export class ReEdgeController {
     const player = this.host.getPlayer();
     if (!player) return;
     const video = document.querySelector<HTMLVideoElement>(
-      "video.html5-main-video",
+      ELEMENT_SELECTORS.video,
     );
     if (!video) return;
 
@@ -80,7 +80,7 @@ export class ReEdgeController {
 
     if (isDVR && bufferingMs > 0) {
       const video = document.querySelector<HTMLVideoElement>(
-        "video.html5-main-video",
+        ELEMENT_SELECTORS.video,
       );
       if (player && video) {
         try {
@@ -97,7 +97,7 @@ export class ReEdgeController {
     }
 
     const video = document.querySelector<HTMLVideoElement>(
-      "video.html5-main-video",
+      ELEMENT_SELECTORS.video,
     );
     if (video) video.playbackRate = 1;
 
@@ -118,7 +118,7 @@ export class ReEdgeController {
 
   private getLiveEdge(): number | null {
     const video = document.querySelector<HTMLVideoElement>(
-      "video.html5-main-video",
+      ELEMENT_SELECTORS.video,
     );
     if (!video || video.seekable.length === 0) return null;
     return video.seekable.end(video.seekable.length - 1);

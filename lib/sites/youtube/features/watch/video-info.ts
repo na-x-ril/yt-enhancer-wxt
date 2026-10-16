@@ -12,6 +12,7 @@ import {
   ELEMENT_SELECTORS,
   waitForElement,
 } from "@/lib/core/utils";
+import { refreshIcon } from "../../components/icons";
 import type { State } from "../../types/player";
 import { VideoState } from "../../types/player";
 import { ViewCountParser } from "./view-count-parser";
@@ -68,9 +69,7 @@ export class VideoInfoView {
       state.currentViewCount = newViewCount;
       state.currentDateText = dateText;
 
-      const titleElement = await waitForElement(
-        "#above-the-fold > div#title-row",
-      );
+      const titleElement = await waitForElement(ELEMENT_SELECTORS.titleRow);
       if (this.deps.isDestroyed() || !titleElement) return;
 
       const { suffix, divisor, decimalPlaces } =
@@ -78,10 +77,12 @@ export class VideoInfoView {
 
       const infoWrapper = createElement("div", { id: ELEMENT_IDS.videoInfo });
 
-      const infoContainer = createElement("div", { id: "info-container" });
+      const infoContainer = createElement("div", {
+        id: ELEMENT_IDS.infoContainer,
+      });
 
       const viewCountContainer = createElement("span", {
-        id: "viewcount-container",
+        id: ELEMENT_IDS.viewCountContainer,
       });
 
       const viewCountSpan = createElement("span", {
@@ -90,10 +91,7 @@ export class VideoInfoView {
       });
 
       const initialValue = newViewCount / divisor;
-      const formattedInitial = initialValue
-        .toFixed(decimalPlaces)
-        .replace(/\.0+$/, "")
-        .replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+      const formattedInitial = this.formatCount(initialValue, decimalPlaces);
       viewCountSpan.textContent = formattedInitial;
 
       const suffixSpan = createElement("span", {
@@ -274,10 +272,7 @@ export class VideoInfoView {
     if (this.deps.isDestroyed()) return;
     const { suffix, divisor, decimalPlaces } =
       this.parser.extractSuffix(newViewCountString);
-    const formatted = (toValue / divisor)
-      .toFixed(decimalPlaces)
-      .replace(/\.0+$/, "")
-      .replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    const formatted = this.formatCount(toValue / divisor, decimalPlaces);
 
     element.textContent = formatted;
 
@@ -287,16 +282,16 @@ export class VideoInfoView {
     state.currentViewCount = toValue;
   }
 
+  private formatCount(value: number, decimalPlaces: number): string {
+    return value
+      .toFixed(decimalPlaces)
+      .replace(/\.0+$/, "")
+      .replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  }
+
   private createRefreshButton(): HTMLButtonElement {
     const button = createElement("button", { id: ELEMENT_IDS.refreshBtn });
-    button.appendChild(
-      buildSVG("0 0 24 24", [
-        {
-          d: "M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z",
-          attrs: { fill: "currentColor" },
-        },
-      ]),
-    );
+    button.appendChild(refreshIcon());
 
     button.onclick = async () => {
       if (this.deps.isDestroyed()) return;

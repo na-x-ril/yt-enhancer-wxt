@@ -1,19 +1,22 @@
-import { buildSVG, createElement } from "@/lib/core/utils";
+import {
+  buildSVG,
+  createElement,
+  ELEMENT_IDS,
+  ELEMENT_SELECTORS,
+} from "@/lib/core/utils";
 import type { Segment } from "./types";
 import { CATEGORY_COLORS, CATEGORY_LABELS } from "./constants";
-
-const BUTTON_ID = "yt-enhancer-sb-skip-btn";
 
 export function showSkipButton(segment: Segment, onSkip: () => void): void {
   hideSkipButton();
 
-  const player = document.querySelector("#movie_player");
+  const player = document.querySelector(ELEMENT_SELECTORS.player);
   if (!player) return;
 
   const color = CATEGORY_COLORS[segment.category] || "#888";
   const label = CATEGORY_LABELS[segment.category] || segment.category;
 
-  const btn = createElement("button", { id: BUTTON_ID });
+  const btn = createElement("button", { id: ELEMENT_IDS.skipButton });
 
   btn.appendChild(
     buildSVG("0 0 16 16", [
@@ -43,6 +46,6 @@ export function showSkipButton(segment: Segment, onSkip: () => void): void {
 }
 
 export function hideSkipButton(): void {
-  const existing = document.getElementById(BUTTON_ID);
+  const existing = document.getElementById(ELEMENT_IDS.skipButton);
   if (existing) existing.remove();
 }

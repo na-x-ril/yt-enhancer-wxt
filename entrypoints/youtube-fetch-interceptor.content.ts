@@ -1,5 +1,7 @@
 // entrypoints/youtube-fetch-interceptor.content.ts
 
+import { EVENTS } from "@/lib/sites/youtube/events";
+
 export default defineContentScript({
   matches: ["*://www.youtube.com/*"],
   world: "MAIN",
@@ -33,7 +35,7 @@ export default defineContentScript({
             const data = await response.clone().json();
             if (data.actions) {
               window.dispatchEvent(
-                new CustomEvent("yt-enhancer-metadata-update", {
+                new CustomEvent(EVENTS.metadataUpdate, {
                   detail: { actions: data.actions },
                 }),
               );

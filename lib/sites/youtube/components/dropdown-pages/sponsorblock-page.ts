@@ -1,4 +1,4 @@
-import { createElement, buildSVG } from "@/lib/core/utils";
+import { createElement } from "@/lib/core/utils";
 import {
   MODE_LABELS,
   CATEGORY_LABELS,
@@ -6,12 +6,14 @@ import {
 } from "../../features/sponsorblock/constants";
 import type {
   SponsorBlockConfig,
-  SBMode,
   SponsorBlockCategory,
 } from "../../features/sponsorblock/types";
-import { ALL_CATEGORIES, isSBMode } from "../../features/sponsorblock/types";
-
-const MODES: SBMode[] = ["auto", "show_skip", "disabled"];
+import {
+  ALL_CATEGORIES,
+  SB_MODES,
+  isSBMode,
+} from "../../features/sponsorblock/types";
+import { backIcon, chevronIcon } from "../icons";
 
 export function createSponsorBlockPage(
   getConfig: () => SponsorBlockConfig,
@@ -26,14 +28,7 @@ export function createSponsorBlockPage(
     className: "sb-back-btn",
     ariaLabel: "Back to settings",
   });
-  backBtn.appendChild(
-    buildSVG("0 0 24 24", [
-      {
-        d: "M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z",
-        attrs: { fill: "currentColor" },
-      },
-    ]),
-  );
+  backBtn.appendChild(backIcon());
   backBtn.onclick = (e) => {
     e.stopPropagation();
     onBack();
@@ -84,7 +79,7 @@ function createCategoryModeRow(
     attrs: { "data-category": category },
   });
 
-  for (const mode of MODES) {
+  for (const mode of SB_MODES) {
     const option = createElement("option", {
       value: mode,
       textContent: MODE_LABELS[mode],
@@ -107,19 +102,7 @@ function createCategoryModeRow(
   };
 
   const icon = createElement("span", { className: "sb-cat-select-icon" });
-  icon.appendChild(
-    buildSVG("0 0 16 16", [
-      {
-        d: "M4 6L8 10L12 6",
-        attrs: {
-          stroke: "currentColor",
-          "stroke-width": "2",
-          "stroke-linecap": "round",
-          "stroke-linejoin": "round",
-        },
-      },
-    ]),
-  );
+  icon.appendChild(chevronIcon());
 
   selectWrapper.append(select, icon);
   row.append(colorDot, labelSpan, selectWrapper);

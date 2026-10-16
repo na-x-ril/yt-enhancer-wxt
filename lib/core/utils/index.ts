@@ -2,9 +2,15 @@
 
 import type { YouTubePlayer } from "@/lib/sites/youtube/types";
 
+/**
+ * IDs/classes the extension itself injects. Both the creating component and
+ * any component that queries it must go through this map — never a literal.
+ */
 export const ELEMENT_IDS = {
   videoInfo: "yt-enhancer-video-info",
+  infoContainer: "info-container",
   viewCount: "yt-enhancer-view-count",
+  viewCountContainer: "viewcount-container",
   viewSuffix: "yt-enhancer-view-suffix",
   dateText: "yt-enhancer-date-text",
   dvrIndicator: "yt-enhancer-dvr-indicator",
@@ -14,10 +20,30 @@ export const ELEMENT_IDS = {
   dropdownButton: "yt-enhancer-dropdown-button",
   menu: "yt-enhancer-menu",
   menuHeader: "yt-enhancer-menu-header",
+  menuSectionBadge: "menu-section-badge",
+  qualitySelector: "quality-selector",
+  sbNavBadge: "sb-nav-badge",
+  codecNavBadge: "codec-nav-badge",
+  codecPageWarning: "codec-page-warning",
+  codecApplyBtn: "codec-apply-btn",
+  skipButton: "yt-enhancer-sb-skip-btn",
 } as const satisfies Record<string, string>;
 
+/** Classes toggled on extension-owned elements (queried with querySelectorAll). */
+export const ELEMENT_CLASSES = {
+  sbMarker: "yt-enhancer-sb-marker",
+} as const satisfies Record<string, string>;
+
+/** Selectors for YouTube's own DOM (third-party, but brittle — keep here). */
 export const ELEMENT_SELECTORS = {
   timeWrapper: ".ytp-delhi-modern div.ytp-time-wrapper",
+  player: "#movie_player",
+  video: "video.html5-main-video",
+  videoEnd: "#end",
+  titleRow: "#above-the-fold > div#title-row",
+  popupContainer: "ytd-popup-container.style-scope",
+  chapters: ".ytp-chapters-container",
+  progressList: ".ytp-progress-list",
 } as const satisfies Record<string, string>;
 
 export const fetchData = async (url: string): Promise<string> => {
@@ -169,7 +195,7 @@ const isPlayerReady = (player: YouTubePlayer): boolean => {
 
 export const waitForPlayer = async (): Promise<YouTubePlayer> => {
   const element = (await waitForElement<HTMLElement>(
-    "#movie_player",
+    ELEMENT_SELECTORS.player,
     10000,
   )) as unknown as YouTubePlayer;
 

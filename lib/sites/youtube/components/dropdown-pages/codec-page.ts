@@ -1,5 +1,6 @@
-import { createElement, buildSVG } from "@/lib/core/utils";
+import { createElement } from "@/lib/core/utils";
 import type { CodecConfig } from "../../features/codec/types";
+import { backIcon } from "../icons";
 
 type CodecToggleKey = keyof CodecConfig;
 
@@ -25,14 +26,7 @@ export function createCodecPage(
     className: "codec-back-btn",
     ariaLabel: "Back to settings",
   });
-  backBtn.appendChild(
-    buildSVG("0 0 24 24", [
-      {
-        d: "M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z",
-        attrs: { fill: "currentColor" },
-      },
-    ]),
-  );
+  backBtn.appendChild(backIcon());
   backBtn.onclick = (e) => {
     e.stopPropagation();
     onBack();

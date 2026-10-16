@@ -3,7 +3,12 @@
 import { FeatureController } from "@/lib/sites/youtube/controller";
 import { FEATURES } from "@/lib/sites/youtube/features";
 import { Dropdown } from "@/lib/sites/youtube/components/dropdown";
-import { getVideoId, waitForElement } from "@/lib/core/utils";
+import {
+  ELEMENT_IDS,
+  ELEMENT_SELECTORS,
+  getVideoId,
+  waitForElement,
+} from "@/lib/core/utils";
 import "@/lib/sites/youtube/styles/style.scss";
 
 class YouTubeContentScript {
@@ -36,7 +41,7 @@ class YouTubeContentScript {
   }
 
   private async waitForTargetAndInject(): Promise<void> {
-    const target = await waitForElement("#end", 15000);
+    const target = await waitForElement(ELEMENT_SELECTORS.videoEnd, 15000);
     if (target && !this.destroyed) {
       this.dropdown?.inject();
     }
@@ -80,7 +85,7 @@ class YouTubeContentScript {
       }
     }
 
-    if (!document.querySelector("#yt-enhancer-dropdown")) {
+    if (!document.querySelector(`#${ELEMENT_IDS.dropdown}`)) {
       this.dropdown?.inject();
     }
   }

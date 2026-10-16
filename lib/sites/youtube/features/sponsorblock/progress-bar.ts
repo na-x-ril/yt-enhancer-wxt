@@ -1,9 +1,10 @@
+import { ELEMENT_CLASSES, ELEMENT_SELECTORS } from '@/lib/core/utils';
 import { CATEGORY_COLORS } from './constants';
 import type { Segment } from './types';
 
-const CHAPTERS_SEL = '.ytp-chapters-container';
-const PROGRESS_LIST_SEL = '.ytp-progress-list';
-const MARKER_CLASS = 'yt-enhancer-sb-marker';
+const CHAPTERS_SEL = ELEMENT_SELECTORS.chapters;
+const PROGRESS_LIST_SEL = ELEMENT_SELECTORS.progressList;
+const MARKER_CLASS = ELEMENT_CLASSES.sbMarker;
 
 interface ChapterRect {
   left: number;

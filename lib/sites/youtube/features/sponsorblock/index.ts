@@ -1,4 +1,5 @@
 import { loadFeatureConfig } from "../config-store";
+import { EVENTS } from "@/lib/sites/youtube/events";
 import type { YouTubePlayer } from "../../types/player";
 import { getVideoId } from "@/lib/core/utils";
 import { fetchSegments, clearCache, isFullyDisabled } from "./api";
@@ -205,12 +206,12 @@ export class SponsorBlockManager {
       this.onSBConfigChange(sanitizeSBConfig(detail.config));
     };
 
-    window.addEventListener("yt-enhancer-sb-setting", handleSetting);
+    window.addEventListener(EVENTS.sbSetting, handleSetting);
     document.addEventListener("keydown", this.handleKeydown);
     this.player?.addEventListener("onStateChange", this.handlePlayerState);
 
     this.cleanupFns.push(() => {
-      window.removeEventListener("yt-enhancer-sb-setting", handleSetting);
+      window.removeEventListener(EVENTS.sbSetting, handleSetting);
       document.removeEventListener("keydown", this.handleKeydown);
       this.player?.removeEventListener(
         "onStateChange",

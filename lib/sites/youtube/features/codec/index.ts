@@ -1,6 +1,7 @@
 // lib/sites/youtube/features/codec/index.ts
 
 import { loadFeatureConfig } from "../config-store";
+import { EVENTS } from "@/lib/sites/youtube/events";
 import type { CodecConfig } from "./types";
 import { DEFAULT_CONFIG, sanitizeCodecConfig, STORAGE_KEY } from "./types";
 
@@ -129,9 +130,9 @@ export class CodecInterceptor {
       this.updateConfig(sanitizeCodecConfig(detail.config));
     };
 
-    window.addEventListener("yt-enhancer-codec-setting", handleSetting);
+    window.addEventListener(EVENTS.codecSetting, handleSetting);
     this.cleanupFns.push(() =>
-      window.removeEventListener("yt-enhancer-codec-setting", handleSetting),
+      window.removeEventListener(EVENTS.codecSetting, handleSetting),
     );
   }
 

@@ -23,6 +23,7 @@ import {
 } from "@/lib/core/utils";
 import { SponsorBlockManager } from "../sponsorblock";
 import { loadFeatureConfig } from "../config-store";
+import { EVENTS } from "@/lib/sites/youtube/events";
 import type {
   BooleanKeys,
   Config,
@@ -34,6 +35,7 @@ import {
   DEFAULT_CONFIG,
   isQuality,
   normalizeSavedConfig,
+  STORAGE_KEY,
   VideoState,
 } from "../../types/player";
 import {
@@ -172,7 +174,7 @@ class WatchFeature {
 
   private async loadConfig(): Promise<void> {
     this.config = await loadFeatureConfig(
-      "dropdown_config",
+      STORAGE_KEY,
       "dropdown config",
       normalizeSavedConfig,
     );
@@ -188,20 +190,20 @@ class WatchFeature {
     const handleCodecReload = () => void this.reloadForCodecChange();
 
     window.addEventListener("beforeunload", handleBeforeUnload);
-    window.addEventListener("yt-enhancer-refresh", handleRefresh);
-    window.addEventListener("yt-enhancer-setting", handleSetting);
-    window.addEventListener("yt-enhancer-quality", handleQuality);
-    window.addEventListener("yt-enhancer-codec-reload", handleCodecReload);
+    window.addEventListener(EVENTS.refresh, handleRefresh);
+    window.addEventListener(EVENTS.setting, handleSetting);
+    window.addEventListener(EVENTS.quality, handleQuality);
+    window.addEventListener(EVENTS.codecReload, handleCodecReload);
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     this.cleanupHandlers.push(
       () => window.removeEventListener("beforeunload", handleBeforeUnload),
-      () => window.removeEventListener("yt-enhancer-refresh", handleRefresh),
-      () => window.removeEventListener("yt-enhancer-setting", handleSetting),
-      () => window.removeEventListener("yt-enhancer-quality", handleQuality),
+      () => window.removeEventListener(EVENTS.refresh, handleRefresh),
+      () => window.removeEventListener(EVENTS.setting, handleSetting),
+      () => window.removeEventListener(EVENTS.quality, handleQuality),
       () =>
         window.removeEventListener(
-          "yt-enhancer-codec-reload",
+          EVENTS.codecReload,
           handleCodecReload,
         ),
       () =>
@@ -228,12 +230,12 @@ class WatchFeature {
     };
 
     this.metadataHandler = handler;
-    window.addEventListener("yt-enhancer-metadata-update", handler);
+    window.addEventListener(EVENTS.metadataUpdate, handler);
 
     this.cleanupHandlers.push(() => {
       if (this.metadataHandler) {
         window.removeEventListener(
-          "yt-enhancer-metadata-update",
+          EVENTS.metadataUpdate,
           this.metadataHandler,
         );
         this.metadataHandler = null;
@@ -518,7 +520,7 @@ class WatchFeature {
 
       const { video, audio } = getAvailableCodecs(ytInitialPlayerResponseObj);
       window.dispatchEvent(
-        new CustomEvent("yt-enhancer-codecs-updated", {
+        new CustomEvent(EVENTS.codecsUpdated, {
           detail: { video, audio },
         }),
       );
