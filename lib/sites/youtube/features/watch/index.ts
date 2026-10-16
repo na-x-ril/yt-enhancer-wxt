@@ -403,7 +403,9 @@ class WatchFeature {
   private armPlayerReadyHealer(): void {
     if (this.state.isDestroyed || this.state.player) return;
     if (this.playerReadyHealer) return;
-    const element = document.querySelector<HTMLElement>("#movie_player");
+    const element = document.querySelector<HTMLElement>(
+      ELEMENT_SELECTORS.player,
+    );
     if (!element) return;
     const player = element as unknown as YouTubePlayer;
 
@@ -432,7 +434,9 @@ class WatchFeature {
     const handler = this.playerReadyHealer;
     this.playerReadyHealer = null;
     if (!handler) return;
-    const element = document.querySelector<HTMLElement>("#movie_player");
+    const element = document.querySelector<HTMLElement>(
+      ELEMENT_SELECTORS.player,
+    );
     try {
       (element as unknown as YouTubePlayer | null)?.removeEventListener(
         "onStateChange",

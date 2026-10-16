@@ -1,8 +1,15 @@
-import { createElement } from "@/lib/core/utils";
-import type { CodecConfig } from "../../features/codec/types";
+import {
+  createElement,
+  DATA_ATTRS,
+  ELEMENT_CLASSES,
+  ELEMENT_IDS,
+} from "@/lib/core/utils";
+import type {
+  CodecConfig,
+  CodecToggleKey,
+} from "../../features/codec/types";
 import { backIcon } from "../icons";
-
-type CodecToggleKey = keyof CodecConfig;
+import { createToggleSwitch } from "../toggle";
 
 const TOGGLE_ITEMS: Array<{ id: CodecToggleKey; label: string; hint: string }> =
   [
@@ -48,7 +55,7 @@ export function createCodecPage(
   page.appendChild(description);
 
   const warning = createElement("div", {
-    id: "codec-page-warning",
+    id: ELEMENT_IDS.codecPageWarning,
     className: "codec-page-warning",
     hidden: true,
   });
@@ -59,7 +66,7 @@ export function createCodecPage(
   }
 
   const applyBtn = createElement("button", {
-    id: "codec-apply-btn",
+    id: ELEMENT_IDS.codecApplyBtn,
     className: "codec-apply-btn",
     textContent: "Terapkan & Muat Ulang",
     disabled: true,
@@ -79,8 +86,8 @@ function createToggleRow(
   onToggle: (id: CodecToggleKey, value: boolean) => boolean,
 ): HTMLElement {
   const row = createElement("div", {
-    className: "toggle-item",
-    attrs: { "data-codec-id": item.id },
+    className: ELEMENT_CLASSES.toggleItem,
+    attrs: { [DATA_ATTRS.codecId]: item.id },
     role: "menuitemcheckbox",
     ariaChecked: String(getConfig()[item.id]),
   });
@@ -101,11 +108,7 @@ function createToggleRow(
 
   labelWrapper.append(labelSpan, hintSpan);
 
-  const toggleSwitch = createElement("div", {
-    className: `toggle-switch ${getConfig()[item.id] ? "active" : ""}`,
-  });
-  toggleSwitch.appendChild(createElement("div", { className: "toggle-knob" }));
-
+  const toggleSwitch = createToggleSwitch(getConfig()[item.id]);
   row.append(labelWrapper, toggleSwitch);
 
   row.onclick = (e) => {

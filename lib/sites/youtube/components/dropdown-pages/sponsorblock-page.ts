@@ -1,4 +1,4 @@
-import { createElement } from "@/lib/core/utils";
+import { createElement, DATA_ATTRS } from "@/lib/core/utils";
 import {
   MODE_LABELS,
   CATEGORY_LABELS,
@@ -56,7 +56,7 @@ function createCategoryModeRow(
 ): HTMLElement {
   const row = createElement("div", {
     className: "sb-category-row",
-    attrs: { "data-category": category },
+    attrs: { [DATA_ATTRS.category]: category },
   });
 
   const colorDot = createElement("span", {
@@ -76,7 +76,7 @@ function createCategoryModeRow(
 
   const select = createElement("select", {
     className: "sb-cat-select",
-    attrs: { "data-category": category },
+    attrs: { [DATA_ATTRS.category]: category },
   });
 
   for (const mode of SB_MODES) {

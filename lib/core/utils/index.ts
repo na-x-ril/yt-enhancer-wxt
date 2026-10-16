@@ -32,6 +32,16 @@ export const ELEMENT_IDS = {
 /** Classes toggled on extension-owned elements (queried with querySelectorAll). */
 export const ELEMENT_CLASSES = {
   sbMarker: "yt-enhancer-sb-marker",
+  toggleItem: "toggle-item",
+  toggleSwitch: "toggle-switch",
+  toggleKnob: "toggle-knob",
+} as const satisfies Record<string, string>;
+
+/** data-* attributes used as the component contract for rendered rows. */
+export const DATA_ATTRS = {
+  toggleId: "data-id",
+  codecId: "data-codec-id",
+  category: "data-category",
 } as const satisfies Record<string, string>;
 
 /** Selectors for YouTube's own DOM (third-party, but brittle — keep here). */

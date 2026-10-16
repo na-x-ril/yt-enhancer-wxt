@@ -7,6 +7,8 @@ export interface CodecConfig {
   blockAvc: boolean;
 }
 
+export type CodecToggleKey = keyof CodecConfig;
+
 export const STORAGE_KEY = "codec_config";
 
 export const DEFAULT_CONFIG: CodecConfig = {
