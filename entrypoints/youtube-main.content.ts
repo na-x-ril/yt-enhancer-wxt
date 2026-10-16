@@ -9,9 +9,11 @@ import "@/lib/sites/youtube/styles/style.scss";
 class YouTubeContentScript {
   private controller: FeatureController;
   private dropdown: Dropdown | null = null;
+  private lastHref: string = location.href;
   private lastPath: string = location.pathname;
   private lastVideoId: string | null = getVideoId();
   private observer: MutationObserver | null = null;
+  private mutationRaf: number | null = null;
   private destroyed = false;
 
   constructor() {
@@ -41,21 +43,41 @@ class YouTubeContentScript {
   }
 
   private startObserver(): void {
-    this.observer = new MutationObserver(() => this.handleMutation());
+    this.observer = new MutationObserver(() => this.scheduleMutationCheck());
     this.observer.observe(document.body, { childList: true, subtree: true });
   }
 
+  /**
+   * YouTube mutates the DOM constantly (progress bar, view count, ads,
+   * comments). Running the full check on every mutation is wasteful, so
+   * coalesce to at most once per frame.
+   */
+  private scheduleMutationCheck(): void {
+    if (this.mutationRaf !== null || this.destroyed) return;
+    this.mutationRaf = requestAnimationFrame(() => {
+      this.mutationRaf = null;
+      if (this.destroyed) return;
+      this.handleMutation();
+    });
+  }
+
   private handleMutation(): void {
-    const currentPath = location.pathname;
-    const currentVideoId = getVideoId();
+    // Parsing the URL is the only non-trivial work here, so gate it on an
+    // actual href change instead of doing it on every mutation.
+    const href = location.href;
+    if (href !== this.lastHref) {
+      this.lastHref = href;
 
-    const pathChanged = currentPath !== this.lastPath;
-    const videoChanged = currentVideoId !== this.lastVideoId;
+      const currentPath = location.pathname;
+      const currentVideoId = getVideoId();
+      const pathChanged = currentPath !== this.lastPath;
+      const videoChanged = currentVideoId !== this.lastVideoId;
 
-    if (pathChanged || videoChanged) {
-      this.lastPath = currentPath;
-      this.lastVideoId = currentVideoId;
-      void this.controller.sync(FEATURES);
+      if (pathChanged || videoChanged) {
+        this.lastPath = currentPath;
+        this.lastVideoId = currentVideoId;
+        void this.controller.sync(FEATURES);
+      }
     }
 
     if (!document.querySelector("#yt-enhancer-dropdown")) {
@@ -65,6 +87,10 @@ class YouTubeContentScript {
 
   destroy(): void {
     this.destroyed = true;
+    if (this.mutationRaf !== null) {
+      cancelAnimationFrame(this.mutationRaf);
+      this.mutationRaf = null;
+    }
     this.observer?.disconnect();
     this.controller.destroyActive();
     this.dropdown?.destroy();
