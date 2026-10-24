@@ -5,7 +5,7 @@ export default defineConfig({
   manifest: ({ browser }) => ({
     name: "YT-Enhancer",
     permissions: ["storage"],
-    host_permissions: ["*://*.youtube.com/*"],
+    host_permissions: ["*://*.youtube.com/*", "*://*.tiktok.com/*"],
     icons: {
       16: "icons/youtube-gear.svg",
       32: "icons/youtube-gear.svg",

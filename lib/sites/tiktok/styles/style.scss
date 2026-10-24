@@ -1,0 +1,186 @@
+// lib/sites/tiktok/styles/style.scss
+//
+// Self-contained: does not reuse the YouTube variables/mixins. Everything
+// is scoped to the extension-owned roots so TikTok's own styles are never
+// touched. Toggle markup comes from lib/core/components/toggle.ts and reuses
+// the shared .toggle-switch / .toggle-knob classes.
+
+@use "variables" as *;
+
+$bg-panel: rgba(28, 28, 28, 0.98);
+$border-panel: rgba(255, 255, 255, 0.12);
+$text-primary: #ffffff;
+$text-secondary: rgba(255, 255, 255, 0.62);
+$accent: #fe2c55;
+$toggle-off: rgba(255, 255, 255, 0.28);
+
+@mixin flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.TUXPopover-popover {
+  background: $bg-semi-black-1;
+  backdrop-filter: $filter-blur-6;
+  border: $border-1;
+}
+
+.desktop-playback-menu-popover {
+  background: $bg-transparent;
+}
+
+#tiktok-enhancer-popup {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  margin-right: 8px !important;
+
+  #tiktok-enhancer-popup-button {
+    @include flex-center;
+    width: 32px !important;
+    height: 32px !important;
+    padding: 0 !important;
+    border: none !important;
+    border-radius: 50% !important;
+    background: rgba(255, 255, 255, 0.1) !important;
+    color: $text-primary !important;
+    cursor: pointer !important;
+    transition:
+      background 0.2s ease,
+      color 0.2s ease !important;
+
+    svg {
+      display: block;
+      width: 20px;
+      height: 20px;
+      transition: transform 0.3s ease;
+    }
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.2) !important;
+    }
+
+    &.tt-enhancer-popup-button-active {
+      background: rgba(254, 44, 85, 0.2) !important;
+      color: $accent !important;
+
+      svg {
+        transform: rotate(45deg);
+      }
+    }
+  }
+}
+
+#tiktok-enhancer-popup-panel {
+  position: fixed !important;
+  top: 4.6rem !important;
+  right: 1.6rem !important;
+  z-index: 2147483000 !important;
+  width: 18.4rem !important;
+  padding: 12px !important;
+  border: 1px solid $border-panel !important;
+  border-radius: 12px !important;
+  background: $bg-panel !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5) !important;
+  color: $text-primary !important;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif !important;
+  font-size: 14px !important;
+  line-height: 1.4 !important;
+  text-align: left !important;
+  box-sizing: border-box !important;
+
+  &[hidden] {
+    display: none !important;
+  }
+
+  .tt-enhancer-popup-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 2px 4px 10px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .tt-enhancer-popup-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: $text-primary;
+  }
+
+  .toggle-item {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 12px !important;
+    width: 100% !important;
+    min-height: 48px;
+    padding: 8px 6px !important;
+    border: none !important;
+    border-radius: 8px !important;
+    background: transparent !important;
+    color: $text-primary !important;
+    font: inherit !important;
+    text-align: left !important;
+    cursor: pointer !important;
+    box-sizing: border-box !important;
+    transition: background 0.2s ease !important;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.08) !important;
+    }
+  }
+
+  .tt-enhancer-toggle-text {
+    display: flex !important;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .tt-enhancer-toggle-name {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    color: $text-primary;
+  }
+
+  .tt-enhancer-toggle-desc {
+    display: block;
+    font-size: 12px;
+    color: $text-secondary;
+  }
+
+  .toggle-switch {
+    display: inline-flex !important;
+    position: relative !important;
+    flex: 0 0 auto;
+    width: 38px !important;
+    height: 22px !important;
+    border-radius: 999px !important;
+    background: $toggle-off !important;
+    transition: background 0.2s ease !important;
+
+    &.active {
+      background: $accent !important;
+    }
+  }
+
+  .toggle-knob {
+    position: absolute !important;
+    top: 3px !important;
+    left: 3px !important;
+    width: 16px !important;
+    height: 16px !important;
+    border-radius: 50% !important;
+    background: #ffffff !important;
+    transition: transform 0.2s ease !important;
+  }
+
+  .toggle-switch.active .toggle-knob {
+    transform: translateX(16px) !important;
+  }
+}

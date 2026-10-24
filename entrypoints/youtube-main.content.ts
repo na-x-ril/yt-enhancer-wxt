@@ -1,6 +1,6 @@
 // entrypoints/youtube-main.content.ts
 
-import { FeatureController } from "@/lib/sites/youtube/controller";
+import { FeatureController } from "@/lib/core/controller";
 import { FEATURES } from "@/lib/sites/youtube/features";
 import { Dropdown } from "@/lib/sites/youtube/components/dropdown";
 import {
@@ -22,7 +22,7 @@ class YouTubeContentScript {
   private destroyed = false;
 
   constructor() {
-    this.controller = new FeatureController();
+    this.controller = new FeatureController({ getItemId: getVideoId });
   }
 
   async init(): Promise<void> {

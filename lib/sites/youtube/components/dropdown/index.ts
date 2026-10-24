@@ -14,7 +14,7 @@ import {
 import { EVENTS } from "@/lib/sites/youtube/events";
 import { createSponsorBlockPage } from "../dropdown-pages/sponsorblock-page";
 import { createCodecPage } from "../dropdown-pages/codec-page";
-import { settingsIcon } from "../icons";
+import { settingsIcon } from "@/lib/core/components/icons";
 import type { SponsorBlockConfig } from "../../features/sponsorblock/types";
 import {
   STORAGE_KEY as SB_STORAGE_KEY,
@@ -29,7 +29,7 @@ import {
 import {
   loadFeatureConfig,
   saveFeatureConfig,
-} from "../../features/config-store";
+} from "@/lib/core/config-store";
 import type { Config, Quality } from "../../types/player";
 import {
   DEFAULT_CONFIG,

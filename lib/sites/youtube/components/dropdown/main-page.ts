@@ -11,7 +11,7 @@ import {
   ELEMENT_IDS,
 } from "@/lib/core/utils";
 import { chevronIcon, refreshIcon } from "../icons";
-import { createToggleSwitch } from "../toggle";
+import { createToggleSwitch } from "@/lib/core/components/toggle";
 import type { CodecConfig } from "../../features/codec/types";
 import type { SponsorBlockConfig } from "../../features/sponsorblock/types";
 import type { BooleanKeys, Config, Quality } from "../../types/player";

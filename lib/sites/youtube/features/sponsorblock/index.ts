@@ -1,4 +1,4 @@
-import { loadFeatureConfig } from "../config-store";
+import { loadFeatureConfig } from "@/lib/core/config-store";
 import { EVENTS } from "@/lib/sites/youtube/events";
 import type { YouTubePlayer } from "../../types/player";
 import { getVideoId } from "@/lib/core/utils";

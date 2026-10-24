@@ -1,8 +1,8 @@
 # YT-Enhancer
 
-A browser extension that enhances the YouTube experience — real-time view-count with smooth odometer animation, auto-loop, auto-caption, automatic quality selection, time-tracking (resume playback), live chat mode, and CSS-level ad blocking.
+A browser extension that enhances the YouTube experience — real-time view-count with smooth odometer animation, auto-loop, auto-caption, automatic quality selection, time-tracking (resume playback), live chat mode, and CSS-level ad blocking — plus auto-unmute for TikTok's feed and search results.
 
-Built with [WXT](https://wxt.dev) v0.20 (MV3 on both Chrome and Firefox) and [Bun](https://bun.sh).
+Built with [WXT](https://wxt.dev) v0.21 (MV3 on both Chrome and Firefox) and [Bun](https://bun.sh).
 
 ## Commands
 
@@ -47,20 +47,23 @@ CI runs `compile` + Chrome/Firefox `build` + `zip` on every push/PR to `main`.
 - **DVR status indicator** — shows "DVR Disabled" on non-DVR live streams
 - **Codec Blocker** — block VP9/AV1/VP8/AVC via patched `MediaSource.isTypeSupported` / `canPlayType` to force alternative codecs; per-video validation rejects configs that would leave no playable codec (requires a "Terapkan & Muat Ulang" to restart the player)
 - **Codec logging** — logs the supported video/audio codecs of the current video to the console
+- **TikTok auto-unmute** — on the For You feed (`/`) presses the mute switch whenever `aria-pressed="false"`; on search (`/search`) unmutes every playing result. Toggle it from the popup in TikTok's top-right action bar. Manual mutes are respected (work only triggers when a video starts playing). The feature waits for the first pointer/key interaction because browsers pause a video that is unmuted without user activation.
 
 ## Architecture
 
-Five content scripts:
+Seven content scripts:
 
 | Script | World | Runs at | Role |
 |---|---|---|---|
-| `youtube-main.content.ts` | MAIN | `document_idle` | Feature orchestrator, dropdown UI, watch-page features. `allFrames: true`. |
+| `youtube-main.content.ts` | MAIN | `document_idle` | YouTube feature orchestrator, dropdown UI, watch-page features. `allFrames: true`. |
 | `youtube-fetch-interceptor.content.ts` | MAIN | `document_start` | Patches `window.fetch` to forward `/youtubei/v1/updated_metadata` as custom events. |
 | `youtube-codec-patch.content.ts` | MAIN | `document_start` | Patches `MediaSource.isTypeSupported` / `canPlayType` to block configured codecs. `allFrames: true`. |
 | `youtube-livechat-patch.content.ts` | MAIN | `document_start` | Intercepts `ytInitialData` / `ytAtN` via `Object.defineProperty`; swaps chat mode from Top chat → Live chat. `allFrames: true`. |
-| `youtube-bridge.content.ts` | ISOLATED | `document_start` | `postMessage` bridge between MAIN world and `browser.storage`. |
+| `tiktok-main.content.ts` | ISOLATED | `document_idle` | TikTok feature orchestrator, top-right popup, feed/video/search auto-unmute. Uses `browser.storage` directly. |
+| `tiktok-pause-guard.content.ts` | MAIN | `document_start` | Ignores `video.pause()` while the tab is hidden (unless the user just pressed something). Must be MAIN to patch the page prototype. |
+| `bridge.content.ts` | ISOLATED | `document_start` | `postMessage` bridge between MAIN world and `browser.storage` for YouTube (MAIN cannot access `browser.*`). `allFrames: true`. |
 
-CSS is injected via the manifest (`cssInjectionMode: "manifest"`), sources in `lib/sites/youtube/styles/` (SCSS).
+CSS is injected via the manifest (`cssInjectionMode: "manifest"`), sources in `lib/sites/youtube/styles/` and `lib/sites/tiktok/styles/` (SCSS). Shared, site-agnostic code lives in `lib/core/` (`bridge`, `config-store`, `controller`, `utils`).
 
 ### Local development
 
@@ -74,7 +77,7 @@ CSS is injected via the manifest (`cssInjectionMode: "manifest"`), sources in `l
 ## Tech stack
 
 - **Runtime**: Bun
-- **Framework**: WXT v0.20 (Chrome MV3)
+- **Framework**: WXT v0.21 (Chrome MV3)
 - **Language**: TypeScript
 - **Styles**: SCSS (`sass-embedded`)
 - **No runtime dependencies** — zero npm deps at runtime

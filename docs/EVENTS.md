@@ -5,15 +5,17 @@ Satu tempat untuk melacak semua komunikasi antar-komponen. Kalau ada bug
 mulai dari tabel ini: pastikan dispatch ada, listener terdaftar, dan
 key storage sama di kedua sisi.
 
-> Nama string event adalah milik `lib/sites/youtube/events.ts` (`EVENTS`);
-> tabel di bawah menjelaskan payload & listener-nya, bukan mendefinisikan
-> ulang namanya. Jangan menulis literal `yt-enhancer-*` di dispatch/listener —
-> `bun check-patterns` menolaknya.
+> Nama string event adalah milik `lib/sites/youtube/events.ts` (`EVENTS`)
+> dan `lib/sites/tiktok/events.ts` (`TIKTOK_EVENTS`); tabel di bawah
+> menjelaskan payload & listener-nya, bukan mendefinisikan ulang namanya.
+> Jangan menulis literal `yt-enhancer-*` / `tiktok-enhancer-*` di
+> dispatch/listener — `bun check-patterns` menolaknya.
 
 > Aturan main:
-> - Config ditulis **hanya oleh Dropdown** (`components/dropdown/`);
->   feature lain membaca via `loadFeatureConfig` + event di bawah.
-> - Semua load/save lewat `features/config-store.ts` (tidak pernah
+> - Config ditulis **hanya oleh UI** (`youtube/.../dropdown/` atau
+>   `tiktok/.../popup/`); feature lain membaca via `loadFeatureConfig` +
+>   event di bawah.
+> - Semua load/save lewat `lib/core/config-store.ts` (tidak pernah
 >   `storageBridge` langsung dari feature).
 > - Semua `window` listener harus punya pelepas di `destroy`
 >   (lihat Batch 3).
@@ -30,6 +32,7 @@ key storage sama di kedua sisi.
 | `yt-enhancer-sb-setting` | `dropdown/` (`dispatchSBSetting`; saat init + tiap berubah) | `{ type: "sponsorblock", config: SponsorBlockConfig }` | `sponsorblock/index.ts` → `handleSetting` (wajib `type === "sponsorblock"`, re-sanitize) |
 | `yt-enhancer-codecs-updated` | `watch/index.ts` (`fetchAndLogVideoData`) | `{ video: string[], audio: string[] }` | `dropdown/` → `handleCodecsUpdated` (validasi array string) |
 | `yt-enhancer-metadata-update` | `youtube-fetch-interceptor.content.ts` (patch `window.fetch` utk `/youtubei/v1/updated_metadata`) | `{ actions?: [...], frameworkUpdates?: {...} }` — WEB 2026 mengirim `frameworkUpdates.entityBatchUpdate.mutations[].payload.viewCountEntity`; `actions[]` lama tetap didukung | `watch/index.ts` → `handleMetadataUpdate` via `parseMetadataUpdate` |
+| `tiktok-enhancer-setting` | `tiktok/components/popup/` (`dispatchSetting`; tiap toggle) | `{ config: TiktokConfig }` | `tiktok/features/{feed,video,search}/index.ts` → `handleSetting` (re-sanitize via `sanitizeTiktokConfig`) |
 
 ## Storage keys (`browser.storage.local` via `storageBridge`)
 
@@ -40,11 +43,14 @@ key storage sama di kedua sisi.
 | `sponsorblock_config` | `dropdown/` (`onSBConfigChange`) | `dropdown/`, `sponsorblock/index.ts` | Sanitize: `sanitizeSBConfig` |
 | `sb_cache_<videoId>` | `sponsorblock/api.ts` (`fetchSegments`) | `sponsorblock/api.ts` | Key per video **tanpa kategori** → tiap ganti config harus `clearCache` dulu (lihat `onConfigChange`) |
 | `video_time_<videoId>` | `watch/time-tracking.ts` (`saveTime`) | `watch/time-tracking.ts` (`restoreTime`) | Skip video <30 dtk & live; throttle ≥3 dtk |
+| `tiktok_config` | `components/popup/` (`persist` → `saveTiktokConfig`) | `popup/`, `features/{feed,video,search}/index.ts` | `{ unmute: boolean }`; sanitize: `sanitizeTiktokConfig`. Ditulis/dibaca langsung via `browser.storage.local` (tanpa bridge). |
 
 ## Bridge transport (`postMessage` MAIN ↔ ISOLATED)
 
 Bukan CustomEvent — request/response mentah di `lib/core/bridge/bridge.ts`
-↔ `entrypoints/youtube-bridge.content.ts`:
+↔ `entrypoints/bridge.content.ts`. Bridge hanya berjalan di YouTube; app
+TikTok berjalan di ISOLATED dan memakai `browser.storage.local` langsung
+(`lib/sites/tiktok/features/config-store.ts`), jadi tidak ada timeout 5 dtk:
 
 `YT_ENHANCER_GET / SET / REMOVE / CLEAR / GET_ALL` (+ `_<TYPE>_RESPONSE`,
 atau `{ error }` bila gagal). Semua request **timeout 5 dtk**

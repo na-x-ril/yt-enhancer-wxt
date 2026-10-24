@@ -9,7 +9,7 @@ import type {
   CodecToggleKey,
 } from "../../features/codec/types";
 import { backIcon } from "../icons";
-import { createToggleSwitch } from "../toggle";
+import { createToggleSwitch } from "@/lib/core/components/toggle";
 
 const TOGGLE_ITEMS: Array<{ id: CodecToggleKey; label: string; hint: string }> =
   [

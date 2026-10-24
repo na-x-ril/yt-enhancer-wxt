@@ -222,15 +222,15 @@ export const waitForPlayer = async (): Promise<YouTubePlayer> => {
     let activeElapsed = 0;
     let lastTick = Date.now();
 
-  const cleanup = () => {
-    clearInterval(checkInterval);
-    document.removeEventListener("visibilitychange", onVisibilityChange);
-    try {
-      element.removeEventListener("onStateChange", onStateChange);
-    } catch (error) {
-      console.warn("[YT-Enhancer] Player listener cleanup error:", error);
-    }
-  };
+    const cleanup = () => {
+      clearInterval(checkInterval);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      try {
+        element.removeEventListener("onStateChange", onStateChange);
+      } catch (error) {
+        console.warn("[YT-Enhancer] Player listener cleanup error:", error);
+      }
+    };
 
     const tryResolve = () => {
       if (isPlayerReady(element)) {
@@ -291,4 +291,8 @@ export const buildSVG = (
     svg.appendChild(path);
   }
   return svg;
+};
+
+export const sleep = (ms: number): Promise<void> => {
+  return new Promise((resolve) => setTimeout(resolve, ms)); // check-patterns-safe: setTimeout always fires
 };

@@ -1,12 +1,9 @@
-// lib/sites/youtube/features/config-store.ts
+// lib/core/config-store.ts
 //
-// Single choke point for loading/saving feature configs.
-//
-// Every feature used to hand-roll the same try/catch + sanitize dance with
-// subtly different fallbacks (e.g. Dropdown merged SB categories by hand
-// instead of using sanitizeSBConfig). All loads/saves go through here so a
-// storage failure behaves the same everywhere: warn once, fall back to
-// sanitized defaults, never hang (see bridge timeout in lib/core/bridge).
+// Single choke point for loading/saving feature configs. Shared by every
+// site so a storage failure behaves the same everywhere: warn once, fall
+// back to sanitized defaults, never hang (see bridge timeout in
+// lib/core/bridge).
 
 import { storageBridge } from "@/lib/core/bridge/bridge";
 

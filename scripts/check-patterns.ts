@@ -19,6 +19,7 @@ import {
   ELEMENT_SELECTORS,
 } from "../lib/core/utils";
 import { EVENTS } from "../lib/sites/youtube/events";
+import { TIKTOK_EVENTS } from "../lib/sites/tiktok/events";
 
 export {};
 
@@ -76,11 +77,13 @@ const IDENTITY_PATTERNS = [
   ...Object.values(DATA_ATTRS),
   ...Object.values(ELEMENT_SELECTORS),
   ...Object.values(EVENTS),
+  ...Object.values(TIKTOK_EVENTS),
 ].map((value) => new RegExp(`["'\`]${escapeRegExp(value)}["'\`]`));
 
 const IDENTITY_ALLOWLIST = [
   /lib[\\/]core[\\/]utils[\\/]index\.ts$/,
   /lib[\\/]sites[\\/]youtube[\\/]events\.ts$/,
+  /lib[\\/]sites[\\/]tiktok[\\/]events\.ts$/,
 ];
 
 // Only flag the identity when the line clearly looks up / wires an element or

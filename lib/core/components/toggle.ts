@@ -1,7 +1,7 @@
-// lib/sites/youtube/components/toggle.ts
+// lib/core/components/toggle.ts
 //
-// Shared toggle-switch markup used by the dropdown main page and the codec
-// page. Centralised so both render the exact same switch structure.
+// Shared toggle-switch markup used by the YouTube dropdown pages and the
+// TikTok popup. Centralised so both render the exact same switch structure.
 
 import { createElement, ELEMENT_CLASSES } from "@/lib/core/utils";
 

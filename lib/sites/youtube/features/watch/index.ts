@@ -19,7 +19,7 @@ import {
   waitForPlayer,
 } from "@/lib/core/utils";
 import { SponsorBlockManager } from "../sponsorblock";
-import { loadFeatureConfig } from "../config-store";
+import { loadFeatureConfig } from "@/lib/core/config-store";
 import { EVENTS } from "@/lib/sites/youtube/events";
 import type {
   BooleanKeys,

@@ -1,6 +1,6 @@
 // lib/sites/youtube/features/codec/index.ts
 
-import { loadFeatureConfig } from "../config-store";
+import { loadFeatureConfig } from "@/lib/core/config-store";
 import { EVENTS } from "@/lib/sites/youtube/events";
 import type { CodecConfig } from "./types";
 import { DEFAULT_CONFIG, sanitizeCodecConfig, STORAGE_KEY } from "./types";

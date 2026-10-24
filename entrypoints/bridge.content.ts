@@ -1,4 +1,4 @@
-// entrypoints/youtube-bridge.content.ts
+// entrypoints/bridge.content.ts
 
 const KNOWN_REQUESTS = new Set([
   "YT_ENHANCER_GET",
@@ -23,6 +23,8 @@ function isBridgeRequest(data: unknown): data is BridgeRequest {
 }
 
 export default defineContentScript({
+  // YouTube MAIN-world scripts cannot touch browser.storage, so they post
+  // requests here. TikTok runs its app in ISOLATED and uses storage directly.
   matches: ["*://*.youtube.com/*"],
   excludeMatches: ["*://*.youtube.com/live_chat*"],
   // All frames: MAIN-world scripts (codec patch, dropdown) run with
